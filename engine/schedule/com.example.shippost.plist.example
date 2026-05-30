@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS LaunchAgent for shippost. Copy to:
+    ~/Library/LaunchAgents/__LABEL__.plist
+  Replace every __PLACEHOLDER__, then:
+    launchctl load -w ~/Library/LaunchAgents/__LABEL__.plist
+
+  Fires daily at __HOUR__:__MINUTE__; generate.sh's ~46h guard makes it land
+  every OTHER day. launchd runs a missed calendar event on wake, so a sleeping
+  Mac self-heals.
+
+  PATH MUST include the dir holding the `claude` binary AND /usr/bin (for jq).
+  Find claude's dir with:  dirname "$(command -v claude)"
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__LABEL__</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__REPO_DIR__/engine/generate.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__CLAUDE_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>__HOUR__</integer>
+        <key>Minute</key>
+        <integer>__MINUTE__</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__DRAFTS_DIR__/.launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__DRAFTS_DIR__/.launchd.err.log</string>
+</dict>
+</plist>

@@ -1,0 +1,10 @@
+# shippost — Linux cron schedule (alternative to the macOS LaunchAgent).
+# Edit your crontab with:  crontab -e
+# Then add ONE line like the below (replace __REPO_DIR__ and the claude bin dir).
+#
+# Fires daily at 09:13; generate.sh's ~46h guard makes it land every OTHER day.
+# PATH must include the `claude` binary's dir AND jq's dir (usually /usr/bin).
+
+PATH=/usr/local/bin:/usr/bin:/bin:__CLAUDE_BIN_DIR__
+
+13 9 * * * /bin/bash __REPO_DIR__/engine/generate.sh

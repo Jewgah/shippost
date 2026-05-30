@@ -1,0 +1,32 @@
+# ─── PRIVATE DATA — never commit (your identity, brand, clients, posts) ───
+config.json
+engine/postable-projects.txt
+recent-posts.md
+voice-sample.md
+*.picks.jsonl
+.onboarded
+.last_run
+.run.log
+*.launchd.out.log
+*.launchd.err.log
+
+# Generated drafts (if the drafts dir ever lives inside the repo)
+drafts/
+*.draft.md
+
+# ─── Node / Next.js ───
+node_modules/
+app/.next/
+app/out/
+app/build/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+.env
+.env.local
+
+# ─── OS / editor ───
+.DS_Store
+*.log
+.idea/
+.vscode/

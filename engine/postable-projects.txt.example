@@ -1,0 +1,11 @@
+# postable-projects.txt — the ONLY repos shippost is allowed to mine for
+# "build-in-public" posts. Copy this file to engine/postable-projects.txt
+# (which is gitignored) and list the absolute path to each of YOUR OWN repos,
+# one per line. Lines starting with # and blank lines are ignored.
+#
+# HARD RULE: never list a client/employer repo here. shippost talks about
+# YOUR craft, never who you build for. Everything is scrubbed anyway, but the
+# allowlist is your first line of defense.
+
+# ~/Desktop/Projects/my-side-project
+# ~/Desktop/Projects/another-app/another-app

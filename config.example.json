@@ -1,0 +1,62 @@
+{
+  "_help": "Copy this file to config.json and edit. config.json is gitignored — NEVER commit it (it holds your bio, brand, and client list). Paths may use ~ for your home dir. See README.md → Configuration.",
+
+  "author": {
+    "name": "Your Name",
+    "bio": "One or two sentences: who you are, what you build, your edge. Every post is grounded in this and must never contradict it.",
+    "portfolioDataDir": ""
+  },
+
+  "brand": {
+    "name": "Your Brand",
+    "tagline": "Your one-line positioning",
+    "offers": "what you build — e.g. web apps, mobile apps, AI systems",
+    "vibe": "the feel — e.g. precise, playful, no-nonsense",
+    "logoPath": ""
+  },
+
+  "dayJob": {
+    "name": "",
+    "shortCode": "",
+    "clientReposRoot": ""
+  },
+
+  "scrub": {
+    "clientNames": ["AcmeCorp", "BigClientLLC"],
+    "extraTerms": []
+  },
+
+  "harvest": {
+    "repoAllowlistFile": "engine/postable-projects.txt",
+    "windowDays": 4,
+    "skillsRoot": "~/.claude/skills",
+    "recentDraftsToScan": 3,
+    "recentPostsMax": 12
+  },
+
+  "output": {
+    "draftsDir": "~/Downloads/shippost-drafts",
+    "recentPostsFile": "recent-posts.md",
+    "voiceSampleFile": "voice-sample.md",
+    "picksLogFile": ".picks.jsonl"
+  },
+
+  "engine": {
+    "claudeBin": "claude",
+    "model": "claude-sonnet-4-6",
+    "minGapHours": 46,
+    "language": "English",
+    "allowedTools": ["Bash", "Read", "Write"]
+  },
+
+  "schedule": {
+    "hour": 9,
+    "minute": 13,
+    "launchdLabel": "com.example.shippost"
+  },
+
+  "app": {
+    "port": 3030,
+    "theme": "neutral"
+  }
+}
