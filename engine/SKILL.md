@@ -56,7 +56,10 @@ For every option write:
 1. **Company post** — ready to paste on the brand page.
 2. **Personal repost caption** — 1–2 first-person lines the author adds when resharing to their own feed (their POV / the "why").
 3. **Why it works** — one line (for the author, not published).
-4. **Suggested visual** — one line (for the author): which image to attach. LinkedIn posts with an image get more reach. Default to the brand logo (if a logo path is in the harvest) for smart-ai-workflow / lesson / brand posts; for build-in-public suggest a concrete screenshot or before/after of the actual feature.
+4. **Suggested visuals — 3 ideas** (for the author): three *different* images that could accompany the post, **best first**. Posts with an image get more reach.
+   - **Mix the types**: a real **screenshot / before-after** of the actual feature, the **brand logo** (if a logo path is in the harvest), and a **conceptual/illustrative** shot.
+   - For any idea that can be **AI-generated**, append a ready-to-paste prompt as `AI prompt: "…"`. Write it for a **natural, authentic** result — real-photography language (candid, available/natural light, shot on 35mm, subtle grain, slightly imperfect framing), a specific subject + setting. **Avoid the obvious-AI tells** (no "3D render, hyperdetailed, octane, trending on artstation, ultra-glossy, perfect symmetry"). It should read like a real photo, not AI art.
+   - For ideas that are a real screenshot/recording, mark `(screenshot — no AI)`.
 
 **Voice rules (strict):**
 - First-person builder energy. Punchy, real, celebrates shipping/learning. **Sounds human, NOT AI.**
@@ -69,6 +72,7 @@ For every option write:
 - 2–5 short lines / tight mini-story; blank line between thoughts.
 - One clear **takeaway** + a soft CTA or genuine question.
 - 0–2 emojis (end of line, not start). Max 3 focused hashtags. ~80–180 words.
+- **Hard limit: section A ≤ 3000 characters** (LinkedIn's cap) — keep section B ≤ 3000 too. Target 80–180 words (~600–1300 chars); if a draft runs long, tighten it. **Never exceed 3000 characters.**
 
 ## Step 6 — Self-critique, score & rank
 
@@ -102,7 +106,10 @@ Write to the exact path the wrapper passed (or `<draftsDir>/YYYY-MM-DD.md`). **T
 <short first-person caption>
 
 _Why it works:_ <one line>
-_Suggested visual:_ <image to attach — e.g. the brand logo, or "screenshot of X">
+_Suggested visuals:_
+1. <best idea — e.g. a real before/after screenshot> (screenshot — no AI)
+2. <idea> — AI prompt: "<natural, photographic prompt — candid, natural light, 35mm, subtle grain>"
+3. <conceptual idea> — AI prompt: "<…>"
 
 ---
 ## Option 2 — build-in-public — currency formatter   (8.6/10)
@@ -111,7 +118,10 @@ _Suggested visual:_ <image to attach — e.g. the brand logo, or "screenshot of 
 **B. Repost caption (your profile)**
 ...
 _Why it works:_ ...
-_Suggested visual:_ ...
+_Suggested visuals:_
+1. ...
+2. ...
+3. ...
 
 ---
 (Options 3, 4, 5 — same shape, descending score)

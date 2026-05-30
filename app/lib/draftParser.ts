@@ -74,7 +74,7 @@ function parseOptionBlock(headerLine: string, body: string[]): DraftOption {
     /^_Why it works:_/im
   );
   const why = extractLine(text, /^_Why it works:_\s*(.*)$/im);
-  const visual = extractLine(text, /^_Suggested visual:_\s*(.*)$/im);
+  const visual = extractVisuals(text);
 
   const parsed = parsedHeader && companyPost.length > 0;
 
@@ -98,6 +98,16 @@ function extractBetween(text: string, start: RegExp, end: RegExp): string {
 function extractLine(text: string, re: RegExp): string {
   const m = re.exec(text);
   return m ? m[1].trim() : "";
+}
+
+// Captures the whole "Suggested visuals" block (3 ideas, possibly multi-line),
+// or the old single-line "_Suggested visual:_ …" form.
+function extractVisuals(text: string): string {
+  const m = /_Suggested visuals?:_[ \t]*(.*)$/im.exec(text);
+  if (!m) return "";
+  const inline = m[1].trim();
+  const after = text.slice(m.index + m[0].length);
+  return stripTrailingRule((inline ? inline + "\n" : "") + after).trim();
 }
 
 export function parseDraft(md: string): Draft {

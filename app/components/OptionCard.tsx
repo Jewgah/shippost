@@ -72,19 +72,22 @@ export default function OptionCard({
         <div className="space-y-3">
           <LinkedInPreview companyPost={option.companyPost} brandName={brandName} hasLogo={hasLogo} />
 
-          <ABSection label="A" hint="company post — paste on your page" text={option.companyPost} />
+          <ABSection label="A" hint="company post — paste on your page" text={option.companyPost} limit={3000} />
           {option.repostCaption && (
-            <ABSection label="B" hint="repost caption — your profile" text={option.repostCaption} />
+            <ABSection label="B" hint="repost caption — your profile" text={option.repostCaption} limit={3000} />
           )}
 
           {option.why && <p className="text-xs text-muted"><span className="text-fg/70">Why it works:</span> {option.why}</p>}
           {option.visual && (
-            <div className="flex items-center gap-2 text-xs text-muted">
-              {showLogoThumb && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src="/api/asset?which=logo" alt="" className="h-8 w-8 rounded object-contain ring-1 ring-border" />
-              )}
-              <span><span className="text-fg/70">Suggested visual:</span> {option.visual}</span>
+            <div className="rounded-lg border border-border bg-bg/30 p-3 text-xs text-muted">
+              <div className="mb-1.5 flex items-center gap-2">
+                {showLogoThumb && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src="/api/asset?which=logo" alt="" className="h-7 w-7 rounded object-contain ring-1 ring-border" />
+                )}
+                <span className="font-semibold text-fg/70">Suggested visuals</span>
+              </div>
+              <div className="whitespace-pre-line leading-relaxed">{option.visual}</div>
             </div>
           )}
 

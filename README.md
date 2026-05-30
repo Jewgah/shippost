@@ -29,8 +29,9 @@ entirely on your machine. No server, no accounts, nothing uploaded.
   and matches them; a humanize pass strips the AI tells.
 - **Scrubbed** — every client/customer name, secret, and internal URL is removed. It only
   ever mines repos you explicitly allowlist.
-- **Each option ships complete**: a company-page post (**A**), a personal-repost caption
-  (**B**), a one-line "why it works", and a suggested visual.
+- **Each option ships complete**: a company-page post (**A**, kept under LinkedIn's 3000-char
+  limit), a personal-repost caption (**B**), a one-line "why it works", and **3 image ideas** —
+  with ready, natural-looking AI-image prompts where useful.
 
 ## The app
 
