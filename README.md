@@ -126,6 +126,21 @@ way; they contain your bio, brand, client list, and unpublished posts. Run
 `scripts/doctor.sh` to confirm nothing private is tracked. The repo you fork/clone ships
 only `.example` templates.
 
+## A note on prompt content
+
+The harvest feeds **your commit messages, bio, and recent posts** into the prompt the
+engine follows. That text isn't executed and the engine only reads your repos + writes
+draft files locally — it can't run code or exfiltrate anything. But it *does* shape what
+Claude writes, so:
+
+- **Only allowlist repos whose history you trust.** If you point shippost at a repo that
+  accepts outside contributions, a hostile commit message could try to steer a draft
+  (classic prompt injection). Worst case is a weird or off-brand draft — not code
+  execution.
+- **You're the last gate.** shippost is semi-auto by design: it drafts, *you* review and
+  publish. Read the post before you hit "I posted this" and nothing odd ever ships. For
+  your own solo repos (the default), this is a non-issue.
+
 ## How it works
 
 ```
