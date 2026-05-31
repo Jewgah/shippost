@@ -11,6 +11,12 @@ SELF_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SELF_DIR/lib/config.sh"
 set +e  # we handle errors explicitly below
 
+# --force (or SHIPPOST_FORCE=1) skips the 2-day guard — used by on-demand runs
+# (the app's "Generate" button, or a manual `generate.sh --force`).
+FORCE=0
+case "${1:-}" in --force|-f) FORCE=1 ;; esac
+[ "${SHIPPOST_FORCE:-0}" = "1" ] && FORCE=1
+
 BOOST_DIR="$CFG_OUTPUT_DIR"
 LAST_RUN="$BOOST_DIR/.last_run"
 LOG="$BOOST_DIR/.run.log"
@@ -28,9 +34,9 @@ notify() { # $1 = message, $2 = sound (macOS only)
   fi
 }
 
-# --- 2-day guard ---
+# --- 2-day guard (skipped when --force / on-demand) ---
 now=$(date +%s)
-if [ -f "$LAST_RUN" ]; then
+if [ "$FORCE" -ne 1 ] && [ -f "$LAST_RUN" ]; then
   last=$(cat "$LAST_RUN" 2>/dev/null || echo 0)
   [ -z "$last" ] && last=0
   if [ $((now - last)) -lt "$MIN_GAP" ]; then

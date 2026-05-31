@@ -73,10 +73,16 @@ First launch walks you through importing your LinkedIn posts — see
 
 ## Generate drafts
 
+- **From the app (easiest):** click **Generate drafts** on the home screen. It runs the
+  engine on your Claude subscription (~1–3 min, with a live progress view) and drops you
+  straight into the 5 new cards.
 - **By hand:** run `/shippost` inside Claude Code (optionally `/shippost smart-ai-workflow`
-  to nudge a pillar), or `bash engine/generate.sh`.
-- **On a schedule (every 2 days):** the scheduler fires *daily*, and a ~46h guard makes it
-  land every other morning.
+  to nudge a pillar), or `bash engine/generate.sh --force`.
+- **On a schedule (optional, every 2 days):** the scheduler fires *daily*, and a ~46h guard
+  makes it land every other morning.
+  > ⚠️ **macOS note:** a launchd agent can't read files in TCC-protected folders
+  > (Desktop/Documents/Downloads). If your repos live there, grant **Full Disk Access** to
+  > `/bin/bash` (System Settings → Privacy & Security), or just use the in-app button.
   - **macOS:** copy `engine/schedule/com.example.shippost.plist.example` to
     `~/Library/LaunchAgents/<your-label>.plist`, fill the `__PLACEHOLDERS__`
     (`__REPO_DIR__`, `__CLAUDE_BIN_DIR__` = `dirname "$(command -v claude)"`, `__HOME__`,

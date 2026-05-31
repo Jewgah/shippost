@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import type { DraftOption } from "@/lib/draftParser";
 import { StarBadge, ScoreBadge, PillarTag } from "./badges";
 import ABSection from "./ABSection";
@@ -44,13 +44,15 @@ export default function OptionCard({
   };
 
   const showLogoThumb = hasLogo && /logo/i.test(option.visual);
+  const reduce = useReducedMotion();
 
   return (
     <motion.article
-      initial={{ opacity: 0, y: 16 }}
+      initial={reduce ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.06, ease: "easeOut" }}
-      className={`rounded-2xl border bg-surface p-4 sm:p-5 ${
+      transition={{ duration: 0.4, delay: reduce ? 0 : index * 0.06, ease: "easeOut" }}
+      whileHover={reduce ? undefined : { y: -3 }}
+      className={`rounded-2xl border bg-surface p-4 transition-shadow duration-200 hover:shadow-glow sm:p-5 ${
         option.star ? "border-accent/60 shadow-glow" : "border-border"
       }`}
     >

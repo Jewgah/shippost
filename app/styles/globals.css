@@ -99,3 +99,26 @@ a {
 .whitespace-pre-line {
   white-space: pre-line;
 }
+
+/* shimmer for skeleton cards during generation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--elevated) 37%, var(--surface) 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* accessibility: honor reduced-motion (neutralize animations + transitions) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
