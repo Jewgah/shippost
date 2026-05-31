@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { recordPick } from "@/lib/voice";
+import { blockCrossSite } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const blocked = blockCrossSite(req);
+  if (blocked) return blocked;
   try {
     const b = await req.json();
     if (!b?.date || typeof b?.option !== "number" || !b?.companyPost) {

@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { parseShares } from "@/lib/sharesCsv";
 import { addRecentPosts, recentPostCount } from "@/lib/voice";
+import { blockCrossSite } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const blocked = blockCrossSite(req);
+  if (blocked) return blocked;
   try {
     const form = await req.formData();
     const file = form.get("file");

@@ -71,6 +71,6 @@ export function getStatus(): Status {
     brandName: c.brand.name,
     authorName: c.author.name,
     theme: c.app.theme,
-    hasLogo: Boolean(c.brand.logoPath),
+    hasLogo: Boolean(c.brand.logoPath) && fs.existsSync(c.brand.logoPath),
   };
 }

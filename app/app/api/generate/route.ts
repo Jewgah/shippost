@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { loadConfig } from "@/lib/config";
+import { blockCrossSite } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +47,10 @@ export async function GET() {
   return NextResponse.json({ running, startedAt, lastResult });
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  const blocked = blockCrossSite(req);
+  if (blocked) return blocked;
+
   const { draftsDir, repoRoot, lock, result } = paths();
   fs.mkdirSync(draftsDir, { recursive: true });
 
