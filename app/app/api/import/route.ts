@@ -15,6 +15,9 @@ export async function POST(req: Request) {
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "no file uploaded" }, { status: 400 });
     }
+    if (file.size > 25 * 1024 * 1024) {
+      return NextResponse.json({ error: "file too large (max 25 MB)" }, { status: 413 });
+    }
     const buf = Buffer.from(await file.arrayBuffer());
     const { posts, column, totalRows } = parseShares(buf, file.name);
     const added = addRecentPosts(posts);

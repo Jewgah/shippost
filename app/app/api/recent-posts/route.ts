@@ -11,6 +11,9 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const text: string = body?.text ?? "";
+    if (text.length > 1_000_000) {
+      return NextResponse.json({ error: "too much text (max ~1 MB)" }, { status: 413 });
+    }
     // Accept either one post or several separated by blank-line + --- + blank-line.
     const posts = text
       .split(/\n\s*-{3,}\s*\n/)

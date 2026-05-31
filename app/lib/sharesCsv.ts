@@ -45,6 +45,9 @@ const looksLikeUrlOnly = (s: string) => /^https?:\/\/\S+$/.test(s.trim());
 
 export function parseShares(buf: Buffer, filename: string): ImportResult {
   const csv = extractCsv(buf, filename);
+  if (csv.length > 20_000_000) {
+    throw new Error("CSV too large (max ~20 MB of text). Trim the export and retry.");
+  }
   const parsed = Papa.parse<Record<string, string>>(csv, {
     header: true,
     skipEmptyLines: true,
