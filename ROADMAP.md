@@ -2,6 +2,16 @@
 
 A running log of notable changes, most recent first.
 
+## verify — reject signal avoids a rejected angle, confirmed by a live run (2026-06-01)
+
+**Problem:** The reject signal's plumbing was unit-tested, but whether a real headless generation actually honors REJECTED ANGLES was unverified.
+
+**Solution:** Ran `engine/generate.sh --force` (the headless `claude -p` path behind the app's Generate button) after rejecting the freshest, most-postable angle (the reject feature itself), chosen because it was NOT in the recent-drafts anti-repeat set, so any avoidance is attributable to the rejection. The harvest fed that feature prominently as commit material; the generated draft produced 5 other recent-commit angles and zero mention of the rejected one. End-to-end loop confirmed: thumb-down → `.rejects.jsonl` → harvest `REJECTED ANGLES` → `SKILL.md` → generation skips it. Test artifacts (the seeded reject, generated draft, run logs) are gitignored, so no code change accompanies this entry.
+
+**Files changed:** none (verification only).
+
+---
+
 ## 93e996c — feat: "Not for me" reject signal that steers future generations (2026-06-01)
 
 **Problem:** There was no way to tell the engine an angle was unwanted, so a rejected idea could resurface every run. Picks taught it what to write; nothing taught it what to avoid.
