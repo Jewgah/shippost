@@ -18,7 +18,9 @@ export interface DraftSummary {
   postedOptions: number[];
 }
 
-export function listDrafts(): DraftSummary[] {
+// `picked` can be passed in by a caller that already read the picks log (e.g. the home page,
+// which also needs cadence from the same read) — otherwise we read it ourselves.
+export function listDrafts(picked?: Record<string, number[]>): DraftSummary[] {
   const { resolved } = loadConfig();
   if (!fs.existsSync(resolved.draftsDir)) return [];
   const files = fs
@@ -27,27 +29,36 @@ export function listDrafts(): DraftSummary[] {
     .sort()
     .reverse();
 
-  const picked = pickedOptionsByDraftId(); // read the picks log once for the whole list
+  const pickedMap = picked ?? pickedOptionsByDraftId();
 
-  return files.map((f) => {
-    const md = fs.readFileSync(path.join(resolved.draftsDir, f), "utf8");
-    const d = parseDraftMeta(md); // headers only — the list never needs post bodies
-    const id = f.replace(/\.md$/, "");
-    const pillars = Array.from(new Set(d.options.map((o) => o.pillar).filter(Boolean)));
-    const top = d.options.find((o) => o.star) ?? d.options[0];
-    // Topics in ranked order (Option 1 first) — the only thing that meaningfully
-    // distinguishes one run from another. Pillars repeat almost every run.
-    const topics = d.options.map((o) => o.topic.trim()).filter(Boolean);
-    return {
-      date: id,
-      optionCount: d.options.length,
-      pillars,
-      topPick: top?.topic.trim() || null,
-      topScore: top?.score ?? null,
-      topics,
-      postedOptions: picked[id] ?? [],
-    };
-  });
+  return files
+    .map((f): DraftSummary | null => {
+      try {
+        const md = fs.readFileSync(path.join(resolved.draftsDir, f), "utf8");
+        const d = parseDraftMeta(md); // headers only — the list never needs post bodies
+        const id = f.replace(/\.md$/, "");
+        const pillars = Array.from(new Set(d.options.map((o) => o.pillar).filter(Boolean)));
+        const top = d.options.find((o) => o.star) ?? d.options[0];
+        // Topics in ranked order (Option 1 first) — the only thing that meaningfully
+        // distinguishes one run from another. Pillars repeat almost every run.
+        const topics = d.options.map((o) => o.topic.trim()).filter(Boolean);
+        return {
+          date: id,
+          optionCount: d.options.length,
+          pillars,
+          topPick: top?.topic.trim() || null,
+          topScore: top?.score ?? null,
+          topics,
+          postedOptions: pickedMap[id] ?? [],
+        };
+      } catch (e) {
+        // A draft that vanished between readdir and read, or is unreadable, shouldn't 500
+        // the whole list — drop it and render the rest, but log so it's diagnosable.
+        console.error(`listDrafts: skipping unreadable draft ${f}:`, e);
+        return null;
+      }
+    })
+    .filter((d): d is DraftSummary => d !== null);
 }
 
 export function readDraft(date: string): Draft | null {

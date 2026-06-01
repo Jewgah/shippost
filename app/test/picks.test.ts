@@ -79,4 +79,14 @@ describe("voice.pickedOptionsByDraftId", () => {
     expect(() => pickedOptionsByDraftId()).not.toThrow();
     expect(pickedOptionsByDraftId()).toEqual({ "2026-06-01_094222": [4] });
   });
+
+  it("caps the picks log at PICKS_CAP so it can't grow unbounded", async () => {
+    const { recordPick, PICKS_CAP } = await import("@/lib/voice");
+    for (let i = 0; i < PICKS_CAP + 10; i++) {
+      // companyPost "" skips the voice-corpus write so this exercises only the picks-log cap
+      recordPick({ date: "2026-06-01_000000", option: i, pillar: "x", topic: "y", companyPost: "" });
+    }
+    const lines = fs.readFileSync(picksPath, "utf8").split(/\r?\n/).filter((l) => l.trim().length > 0);
+    expect(lines.length).toBe(PICKS_CAP);
+  });
 });
