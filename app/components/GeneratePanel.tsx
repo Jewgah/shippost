@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import FolderPicker from "./FolderPicker";
 
 type Phase = "idle" | "running" | "error";
 
@@ -34,6 +35,7 @@ export default function GeneratePanel() {
   const [category, setCategory] = useState<string | null>(null);
   const [projects, setProjects] = useState<{ name: string; source: string; inAllowlist: boolean }[]>([]);
   const [categories, setCategories] = useState<{ id: string; label: string }[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const steerCount = [project, category, direction.trim() ? "d" : ""].filter(Boolean).length;
 
   const stopPoll = () => {
@@ -94,18 +96,30 @@ export default function GeneratePanel() {
     return () => clearInterval(t);
   }, [phase]);
 
-  // load steering suggestions (projects + categories) once
-  useEffect(() => {
-    (async () => {
-      try {
-        const j = await (await fetch("/api/suggestions", { cache: "no-store" })).json();
-        setProjects(Array.isArray(j.projects) ? j.projects : []);
-        setCategories(Array.isArray(j.categories) ? j.categories : []);
-      } catch {
-        /* suggestions are optional — generation still works without them */
-      }
-    })();
+  // load steering suggestions (projects + categories) — reusable so we can refresh after a
+  // project is added through the folder picker.
+  const loadSuggestions = useCallback(async () => {
+    try {
+      const j = await (await fetch("/api/suggestions", { cache: "no-store" })).json();
+      setProjects(Array.isArray(j.projects) ? j.projects : []);
+      setCategories(Array.isArray(j.categories) ? j.categories : []);
+    } catch {
+      /* suggestions are optional — generation still works without them */
+    }
   }, []);
+
+  useEffect(() => {
+    loadSuggestions();
+  }, [loadSuggestions]);
+
+  // A freshly added project should appear as a chip AND be selected as the batch scope.
+  const onProjectAdded = useCallback(
+    async (name: string) => {
+      await loadSuggestions();
+      setProject(name);
+    },
+    [loadSuggestions]
+  );
 
   const generate = async () => {
     setError(null);
@@ -222,39 +236,46 @@ export default function GeneratePanel() {
                       />
                     </div>
 
-                    {projects.length > 0 && (
-                      <div>
-                        <div className="mb-1.5 text-xs text-muted">Project</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {projects.map((p) => {
-                            const active = project === p.name;
-                            return (
-                              <motion.button
-                                key={`${p.source}-${p.name}`}
-                                type="button"
-                                whileTap={reduce ? undefined : { scale: 0.95 }}
-                                onClick={() => setProject(active ? null : p.name)}
-                                title={
-                                  p.inAllowlist
-                                    ? "Scopes generation to this project's recent work"
-                                    : "Used as a focus hint (not in your mineable allowlist)"
-                                }
-                                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition ${
-                                  active
-                                    ? "border-accent bg-accent/15 text-accent"
-                                    : "border-border bg-elevated text-fg hover:border-accent/60"
-                                }`}
-                              >
-                                {p.name}
-                                {!p.inAllowlist && (
-                                  <span className="text-[9px] uppercase tracking-wide text-muted">recent</span>
-                                )}
-                              </motion.button>
-                            );
-                          })}
-                        </div>
+                    <div>
+                      <div className="mb-1.5 text-xs text-muted">Project</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {projects.map((p) => {
+                          const active = project === p.name;
+                          return (
+                            <motion.button
+                              key={`${p.source}-${p.name}`}
+                              type="button"
+                              whileTap={reduce ? undefined : { scale: 0.95 }}
+                              onClick={() => setProject(active ? null : p.name)}
+                              title={
+                                p.inAllowlist
+                                  ? "Scopes generation to this project's recent work"
+                                  : "Used as a focus hint (not in your mineable allowlist)"
+                              }
+                              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition ${
+                                active
+                                  ? "border-accent bg-accent/15 text-accent"
+                                  : "border-border bg-elevated text-fg hover:border-accent/60"
+                              }`}
+                            >
+                              {p.name}
+                              {!p.inAllowlist && (
+                                <span className="text-[9px] uppercase tracking-wide text-muted">recent</span>
+                              )}
+                            </motion.button>
+                          );
+                        })}
+                        <motion.button
+                          type="button"
+                          whileTap={reduce ? undefined : { scale: 0.95 }}
+                          onClick={() => setPickerOpen(true)}
+                          title="Point shippost at another of your repos (adds it to the mineable allowlist)"
+                          className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-muted transition hover:border-accent hover:text-accent"
+                        >
+                          + Add a project
+                        </motion.button>
                       </div>
-                    )}
+                    </div>
 
                     {categories.length > 0 && (
                       <div>
@@ -353,6 +374,8 @@ export default function GeneratePanel() {
           </div>
         </div>
       )}
+
+      {pickerOpen && <FolderPicker onClose={() => setPickerOpen(false)} onAdded={onProjectAdded} />}
     </div>
   );
 }
