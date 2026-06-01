@@ -3,7 +3,7 @@ import { parseDraft } from "@/lib/draftParser";
 
 const WELL_FORMED = `# LinkedIn drafts — 2026-05-31 · 5 options, ranked · pick ONE
 
-> Post section A to the HakolKal company page, then Repost-with-thoughts to your
+> Post section A to your company page, then Repost-with-thoughts to your
 > profile using section B. ⭐ = my top pick this run.
 
 ## ⭐ Option 1 — smart-ai-workflow — multi-agent review   (9.2/10)
@@ -11,6 +11,8 @@ const WELL_FORMED = `# LinkedIn drafts — 2026-05-31 · 5 options, ranked · pi
 A hook that stops the scroll.
 
 The body of the post.
+
+Built it in a day — then shipped → live.
 
 **B. Repost caption (your profile)**
 My personal take on it.
@@ -67,6 +69,15 @@ describe("parseDraft — well-formed", () => {
 
   it("companyPost excludes the B caption text", () => {
     expect(d.options[0].companyPost).not.toContain("My personal take");
+  });
+
+  it("humanizes the post body: strips em-dashes/arrows from A & B but NOT the header", () => {
+    const o = d.options[0];
+    expect(o.companyPost).toContain("Built it in a day - then shipped to live.");
+    expect(o.companyPost).not.toMatch(/[—–→]/);
+    // the header keeps its em-dashes (they're the parser separator) — pillar/topic intact
+    expect(o.pillar).toBe("smart-ai-workflow");
+    expect(o.topic).toBe("multi-agent review");
   });
 
   it("captures the multi-line 3-idea visuals block incl. an AI prompt", () => {

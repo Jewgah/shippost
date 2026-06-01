@@ -16,6 +16,24 @@ VOICE_SAMPLE="$BOOST_DIR/$CFG_VOICE_SAMPLE_FILE"
 
 mkdir -p "$BOOST_DIR"
 
+# Optional project scope from the app (env). Matched against the allowlist ONLY — the
+# allowlist stays the sole set of repos ever mined. A scope matching no allowlisted repo
+# falls back to the full allowlist (never an empty harvest). Notes go to stderr so they
+# don't pollute the stdout digest.
+SCOPE="${SHIPPOST_PROJECT:-}"
+if [ -n "$SCOPE" ] && [ -f "$CFG_REPO_ALLOWLIST" ]; then
+  _match=0
+  while IFS= read -r _l; do
+    case "$_l" in ''|\#*) continue ;; esac
+    case "$_l" in "~"|"~/"*) _r="${HOME}${_l#\~}" ;; *) _r="$_l" ;; esac
+    [ "$(basename "$_r")" = "$SCOPE" ] && { _match=1; break; }
+  done < "$CFG_REPO_ALLOWLIST"
+  if [ "$_match" -eq 0 ]; then
+    echo "shippost: scope '$SCOPE' not in allowlist — using full allowlist (prompt-level focus only)" >&2
+    SCOPE=""
+  fi
+fi
+
 echo "=================================================================="
 echo "SHIPPOST HARVEST   (window: last ${DAYS} days)"
 echo "=================================================================="
@@ -60,11 +78,16 @@ echo "  secrets, tokens, DB names, internal/staging URLs, IPs."
 # ---------- PILLAR 1: BUILD-IN-PUBLIC (git activity, allowlist only) ----------
 echo
 echo "### PILLAR build-in-public  — recent commits in allowlisted repos"
+[ -n "$SCOPE" ] && echo "  (scoped to project: $SCOPE)"
 if [ -f "$CFG_REPO_ALLOWLIST" ]; then
   while IFS= read -r line; do
     case "$line" in ''|\#*) continue ;; esac
     # expand a leading ~ in the allowlist path
     case "$line" in "~"|"~/"*) repo="${HOME}${line#\~}" ;; *) repo="$line" ;; esac
+    # honor an optional single-project scope (allowlist-bounded)
+    if [ -n "$SCOPE" ] && [ "$(basename "$repo")" != "$SCOPE" ]; then
+      continue
+    fi
     if [ ! -d "$repo/.git" ]; then
       echo "  [skip] not a git repo / missing: $repo"
       continue

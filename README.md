@@ -37,7 +37,13 @@ entirely on your machine. No server, no accounts, nothing uploaded.
 
 A local Next.js app shows the 5 options as cards with a live LinkedIn-style preview,
 one-click copy for A and B, three themes, and a **"✓ I posted this"** button that adds
-the published post to your voice corpus — so it gets more *you* over time.
+the published post to your voice corpus, so it gets more *you* over time.
+
+You can **steer a batch** before generating (a direction, a specific project, or a pillar),
+**edit any option with a follow-up prompt** ("make it punchier, drop the hashtags"), and a
+**Settings** page lets you re-import your posts, upload a logo or photo, and switch between
+**personal-only** (one first-person post per option, the default) and **company mode** (the
+company-page post plus a repost caption, A and B).
 
 ## Requirements
 
@@ -108,7 +114,7 @@ All settings live in `config.json` (copied from `config.example.json`). Highligh
 | `brand.{name,tagline,offers,vibe,logoPath}` | The company page you post to (your own brand). |
 | `dayJob.name`, `scrub.clientNames` | Names to **redact** — never posted about. |
 | `harvest.windowDays`, `recentPostsMax` | How far back to look; how many of your posts to feed the voice model. |
-| `output.draftsDir` | Where dated `YYYY-MM-DD.md` drafts (and the app's data) live. |
+| `output.draftsDir` | Where the dated draft files (one per run, and the app's data) live. |
 | `engine.{claudeBin,model,minGapHours,language}` | Claude binary/model, the every-2-days guard, output language. |
 | `app.theme` | `neutral` (default), `midnight`, or `neon`. |
 

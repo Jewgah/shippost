@@ -90,6 +90,20 @@ a {
   text-decoration: none;
 }
 
+/* pointer affordance on interactive elements (Tailwind v3 preflight leaves
+   buttons at the browser-default cursor). Disabled controls stay default. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a[href],
+summary,
+label[for] {
+  cursor: pointer;
+}
+button:disabled,
+[aria-disabled="true"] {
+  cursor: default;
+}
+
 ::selection {
   background: var(--accent);
   color: #fff;
@@ -109,6 +123,57 @@ a {
   background: linear-gradient(90deg, var(--surface) 25%, var(--elevated) 37%, var(--surface) 63%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* ── enhanced motion layer ── shared animation primitives ── */
+
+/* animatable conic angle → sweeping gradient borders without rotating the box.
+   Falls back to a static gradient where @property is unsupported. */
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes border-angle {
+  to { --angle: 360deg; }
+}
+.border-sweep {
+  background:
+    conic-gradient(
+      from var(--angle),
+      transparent 0%,
+      var(--accent) 20%,
+      var(--accent2) 40%,
+      var(--good) 55%,
+      transparent 75%
+    );
+  animation: border-angle 4s linear infinite;
+}
+
+/* indeterminate progress sweep for the generation bar */
+@keyframes progress-slide {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(420%); }
+}
+.progress-sweep {
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), transparent);
+  animation: progress-slide 1.6s ease-in-out infinite;
+}
+
+/* moving sheen for gradient-clipped wordmark text */
+@keyframes text-shimmer {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.text-shimmer {
+  background-size: 200% auto;
+  animation: text-shimmer 3.5s linear infinite;
+}
+
+/* one-shot shine sweep across a button on hover */
+@keyframes shine {
+  0%        { transform: translateX(-130%) skewX(-12deg); }
+  60%, 100% { transform: translateX(230%) skewX(-12deg); }
 }
 
 /* accessibility: honor reduced-motion (neutralize animations + transitions) */

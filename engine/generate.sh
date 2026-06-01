@@ -26,7 +26,26 @@ mkdir -p "$BOOST_DIR"
 
 notify() { # $1 = message, $2 = sound (macOS only)
   if [ "$(uname)" = "Darwin" ]; then
-    /usr/bin/osascript -e "display notification \"$1\" with title \"shippost\" sound name \"$2\"" 2>/dev/null
+    local url="http://localhost:${CFG_APP_PORT:-3030}/"
+    # Resolve terminal-notifier even under a minimal launchd PATH: try PATH first,
+    # then the usual Homebrew locations (arm64 + Intel).
+    local tn
+    tn="$(command -v terminal-notifier 2>/dev/null)"
+    if [ -z "$tn" ]; then
+      for c in /opt/homebrew/bin/terminal-notifier /usr/local/bin/terminal-notifier; do
+        [ -x "$c" ] && { tn="$c"; break; }
+      done
+    fi
+    if [ -n "$tn" ]; then
+      # terminal-notifier lets the notification's CLICK open the app.
+      "$tn" -title "shippost" -message "$1" -open "$url" ${2:+-sound "$2"} >/dev/null 2>&1
+    else
+      # Fallback: a plain notification. NOTE: clicking an osascript notification
+      # opens Script Editor (a macOS quirk — osascript "owns" the notification).
+      # Install terminal-notifier for a clickable "open shippost" action:
+      #   brew install terminal-notifier
+      /usr/bin/osascript -e "display notification \"$1\" with title \"shippost\" sound name \"$2\"" 2>/dev/null
+    fi
   elif command -v notify-send >/dev/null 2>&1; then
     notify-send "shippost" "$1" 2>/dev/null
   else
@@ -46,10 +65,32 @@ if [ "$FORCE" -ne 1 ] && [ -f "$LAST_RUN" ]; then
 fi
 
 today=$(date +%F)
-draft="$BOOST_DIR/$today.md"
+# Each run gets its own timestamped file so multiple generations on the same day
+# don't overwrite each other. The app passes SHIPPOST_STAMP so it can predict the
+# output path; scheduled/manual runs fall back to computing their own.
+stamp="${SHIPPOST_STAMP:-$(date +%F_%H%M%S)}"
+draft="$BOOST_DIR/$stamp.md"
 echo "$(date '+%F %T') starting generation -> $draft" >> "$LOG"
 
 PROMPT="Run the shippost post pipeline now. Read and follow $CFG_SKILL_MD exactly, start to finish. Language: $CFG_LANGUAGE. Today is $today. Produce 5 ranked, distinct options and save them to this exact path: $draft . Do not ask any questions — make the best editorial choices and write the file."
+
+# Optional per-run steering passed from the app via env vars. Appended to the prompt;
+# SHIPPOST_PROJECT additionally scopes the harvest (see harvest.sh).
+FOCUS=""
+[ -n "${SHIPPOST_PROJECT:-}" ]  && FOCUS="$FOCUS Scope this run to the project '${SHIPPOST_PROJECT}' only — base every option on that project's recent work."
+[ -n "${SHIPPOST_CATEGORY:-}" ] && FOCUS="$FOCUS Bias the 5 options toward the '${SHIPPOST_CATEGORY}' pillar."
+[ -n "${SHIPPOST_FOCUS:-}" ]    && FOCUS="$FOCUS Direction from the user — honor it above generic editorial choices: \"${SHIPPOST_FOCUS}\"."
+if [ -n "$FOCUS" ]; then
+  PROMPT="$PROMPT  Additional steering for THIS run:$FOCUS"
+  echo "$(date '+%F %T') steering:$FOCUS" >> "$LOG"
+fi
+
+# Posting mode (personal-only is the default; company mode is opt-in in Settings).
+if [ "${SHIPPOST_COMPANY_MODE:-0}" = "1" ]; then
+  PROMPT="$PROMPT  Mode: COMPANY — each option keeps a company-page post (section A) AND a short first-person repost caption (section B), exactly as the SKILL specifies."
+else
+  PROMPT="$PROMPT  Mode: PERSONAL-ONLY — write each option as ONE first-person post for the author's OWN LinkedIn profile (not a company page). Put that single post under '**A. Company post**' and OMIT section B entirely (no repost caption). Everything else (header, _Why it works:_, _Suggested visuals:_) stays as specified."
+fi
 
 "$CFG_CLAUDE_BIN" -p "$PROMPT" \
   --allowed-tools $CFG_ALLOWED_TOOLS \

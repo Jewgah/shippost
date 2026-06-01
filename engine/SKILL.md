@@ -65,6 +65,7 @@ For every option write:
 - First-person builder energy. Punchy, real, celebrates shipping/learning. **Sounds human, NOT AI.**
 - **Brand:** you may name the brand and frame posts around it, but keep the author's authentic human voice — never borrow marketing adjectives.
 - **Banned:** leverage, synergy, game-changer, revolutionary, cutting-edge, paradigm, unlock, delve, "in today's fast-paced world", "I'm thrilled/excited to announce", "🚀 to the moon".
+- **Punctuation (post body, sections A & B):** NO em-dashes (—), NO en-dashes (–), NO arrows (→ ← ⇒). They instantly read as "a robot wrote this." Use a comma, a period, parentheses, or a plain hyphen; write the word ("to", "then", "becomes") instead of an arrow. (This is for the A/B post text only — the per-option **header line** still uses " — " as the file's separator, so keep that.)
 - Specific, scrubbed details (numbers, the real problem, feature names). Specificity = credibility.
 
 **LinkedIn format (per company post):**
@@ -83,7 +84,7 @@ Score each option 1–10 on: **Hook** (does line 1 stop the scroll?), **Specific
 Real people don't write like polished marketing copy. Pass every draft through this filter:
 - **Vary the rhythm.** AI defaults to same-length sentences. Mix a long line with a 3-word punch. Allow **one deliberate sentence fragment**.
 - **Kill the bow.** Don't end every post with a neat summarizing wrap-up. Stop on the sharp line, or an honest question — not a moral.
-- **Cut the tells:** the rhetorical-question-then-answer ("The result? …"), the perfect tricolon ("faster, cleaner, simpler" — drop one), the "it's not X, it's Y" overuse, em-dash overload.
+- **Cut the tells:** the rhetorical-question-then-answer ("The result? …"), the perfect tricolon ("faster, cleaner, simpler", drop one), the "it's not X, it's Y" overuse, and every em-dash, en-dash, and arrow in the post body (use commas, periods, parentheses, or a plain hyphen).
 - **Rough up over-polished hooks** so they sound said, not written.
 - **Section B (personal caption) goes harder** — more first-person, more raw, a little messy is fine; it's the author talking. **Section A (company post) stays lighter** — human, but still credible and brand-safe.
 - Keep specifics and the banned-word ban. Re-check the hook after editing; keep whichever version is stronger.

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
-import { loadConfig } from "@/lib/config";
+import { effectiveLogoPath, uploadedAvatarPath } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,18 +15,21 @@ const MIME: Record<string, string> = {
   ".svg": "image/svg+xml",
 };
 
-// Streams the configured brand logo only — never an arbitrary path.
+// Streams the brand logo (uploaded one wins over config) or the author avatar.
+// Only these two known assets — never an arbitrary path.
 export async function GET(req: Request) {
   const which = new URL(req.url).searchParams.get("which");
-  if (which !== "logo") return NextResponse.json({ error: "unknown asset" }, { status: 400 });
+  let file: string | null = null;
+  if (which === "logo") file = effectiveLogoPath();
+  else if (which === "avatar") file = uploadedAvatarPath();
+  else return NextResponse.json({ error: "unknown asset" }, { status: 400 });
 
-  const { brand } = loadConfig();
-  if (!brand.logoPath || !fs.existsSync(brand.logoPath)) {
-    return NextResponse.json({ error: "no logo configured" }, { status: 404 });
+  if (!file || !fs.existsSync(file)) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
   }
-  const ext = path.extname(brand.logoPath).toLowerCase();
-  const data = fs.readFileSync(brand.logoPath);
+  const ext = path.extname(file).toLowerCase();
+  const data = fs.readFileSync(file);
   return new NextResponse(new Uint8Array(data), {
-    headers: { "Content-Type": MIME[ext] ?? "application/octet-stream" },
+    headers: { "Content-Type": MIME[ext] ?? "application/octet-stream", "Cache-Control": "no-store" },
   });
 }

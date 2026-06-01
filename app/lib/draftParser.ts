@@ -40,6 +40,20 @@ const HEADER_RE_NOSCORE = new RegExp(
 
 const FOOTER_RE = /^(pillars used|sources(\s*\(scrubbed\))?|scrubbed)\s*:/i;
 
+/**
+ * Strip "AI tells" from POST BODY text (sections A & B) so a pasted post reads human:
+ * em/en dashes become a spaced hyphen, fancy arrows become the word "to". NEVER run this
+ * on the header/title/footer — the option header uses " — " (em-dash) as the parser
+ * separator (see SEP above). Idempotent; only touches em/en dashes + arrow glyphs, never
+ * ASCII hyphens, and never collapses newlines (only runs of spaces/tabs).
+ */
+export function humanizeText(s: string): string {
+  return s
+    .replace(/[ \t]*[—–][ \t]*/g, " - ")
+    .replace(/[ \t]*[→←⇒⟶➜➔➙➔]+[ \t]*/g, " to ")
+    .replace(/[ \t]{2,}/g, " ");
+}
+
 function parseOptionBlock(headerLine: string, body: string[]): DraftOption {
   const raw = [headerLine, ...body].join("\n").trim();
   let m = HEADER_RE.exec(headerLine);
@@ -65,13 +79,13 @@ function parseOptionBlock(headerLine: string, body: string[]): DraftOption {
     parsedHeader = false;
   }
 
-  // Sub-section extraction
+  // Sub-section extraction. Humanize ONLY the published post text (A & B).
   const text = body.join("\n");
-  const companyPost = extractBetween(text, /\*\*A\.\s*Company post\*\*/i, /\*\*B\.\s*Repost caption[^\n]*\*\*/i);
-  const repostCaption = extractBetween(
-    text,
-    /\*\*B\.\s*Repost caption[^\n]*\*\*/i,
-    /^_Why it works:_/im
+  const companyPost = humanizeText(
+    extractBetween(text, /\*\*A\.\s*Company post\*\*/i, /\*\*B\.\s*Repost caption[^\n]*\*\*/i)
+  );
+  const repostCaption = humanizeText(
+    extractBetween(text, /\*\*B\.\s*Repost caption[^\n]*\*\*/i, /^_Why it works:_/im)
   );
   const why = extractLine(text, /^_Why it works:_\s*(.*)$/im);
   const visual = extractVisuals(text);

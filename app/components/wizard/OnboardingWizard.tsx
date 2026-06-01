@@ -81,13 +81,49 @@ export default function OnboardingWizard({ authorName }: { authorName: string })
 
     // 1 — export guide
     <Panel key="1" title="Step 1 — request your LinkedIn data">
+      <motion.a
+        href="https://www.linkedin.com/mypreferences/d/download-my-data"
+        target="_blank"
+        rel="noopener noreferrer"
+        whileHover={{ y: -2 }}
+        whileTap={{ y: 0, scale: 0.98 }}
+        className="group inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-glow"
+      >
+        {/* external-link glyph */}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M14 4h6v6M20 4l-8 8M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Open LinkedIn data export
+        <span className="transition-transform group-hover:translate-x-0.5">→</span>
+      </motion.a>
+      <p className="text-xs text-muted">
+        Opens LinkedIn’s <strong>“Get a copy of your data”</strong> page in a new tab — you may need to log in.
+      </p>
       <ol className="list-decimal space-y-2 pl-5">
-        <li>On LinkedIn: click your photo → <strong>Settings &amp; Privacy</strong>.</li>
-        <li>Go to <strong>Data Privacy</strong> → <strong>Get a copy of your data</strong>.</li>
-        <li>Pick <strong>“Posts”</strong> (or the specific “Shares” option), then <strong>Request archive</strong>.</li>
-        <li>The posts file is usually ready in a few minutes (the full archive can take up to 24h). You’ll get an email with a download link.</li>
-        <li>Download the ZIP. Inside is a <code className="font-mono text-accent">Shares.csv</code> with your post text.</li>
+        <li>
+          On that page, choose <strong>“Want something in particular?”</strong> and tick the content/activity files —
+          or, if you don’t see a posts option, pick <strong>“Download larger data archive”</strong> (the full export).
+          Both include your posts.
+        </li>
+        <li>Click <strong>Request archive</strong> (it’ll ask for your password).</li>
+        <li>LinkedIn emails you a download link — specific files arrive in minutes, the full archive can take up to 24h.</li>
+        <li>
+          Download the ZIP. Inside is a <code className="font-mono text-accent">Shares.csv</code> with your post text —
+          that’s the file you’ll drop in next.
+        </li>
       </ol>
+      <p className="text-xs text-muted">
+        Prefer to click through yourself? Settings &amp; Privacy →{" "}
+        <a
+          href="https://www.linkedin.com/mypreferences/d/categories/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline decoration-dotted underline-offset-2 hover:text-accent"
+        >
+          Data privacy
+        </a>{" "}
+        → Get a copy of your data.
+      </p>
       <Nav onBack={() => setStep(0)} onNext={() => setStep(2)} nextLabel="I have my file" onSkip={finish} busy={busy} />
     </Panel>,
 
@@ -132,7 +168,7 @@ export default function OnboardingWizard({ authorName }: { authorName: string })
         onChange={(e) => setManual(e.target.value)}
         rows={8}
         placeholder={"First post text…\n\n---\n\nSecond post text…"}
-        className="w-full rounded-lg border border-border bg-bg/40 p-3 text-sm text-fg outline-none focus:border-accent"
+        className="w-full rounded-lg border border-border bg-elevated p-3 text-sm text-fg outline-none placeholder:text-muted focus:border-accent"
       />
       {error && <p className="text-sm text-red-400">{error}</p>}
       <Nav

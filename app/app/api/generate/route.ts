@@ -4,9 +4,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { loadConfig } from "@/lib/config";
 import { blockCrossSite } from "@/lib/guard";
+import { PILLAR_LABELS } from "@/lib/theme";
+import { cleanField } from "@/lib/steering";
+import { readSettings } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
 
 const STALE_MS = 15 * 60 * 1000; // a run older than this is considered dead (well beyond a real ~1-5min run)
 
@@ -20,10 +24,13 @@ function paths() {
   };
 }
 
-function today() {
+// A per-run id: YYYY-MM-DD_HHMMSS. Passed to the engine via SHIPPOST_STAMP so the
+// route and engine agree on the output filename, and so multiple runs on the same
+// day produce distinct files instead of overwriting each other.
+function nowStamp() {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
 function readRunning(lock: string): { running: boolean; startedAt: number | null } {
@@ -51,19 +58,38 @@ export async function POST(req: Request) {
   const blocked = blockCrossSite(req);
   if (blocked) return blocked;
 
+  // Optional steering (back-compatible: existing callers send no body).
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    /* no/invalid body — run with defaults */
+  }
+  const direction = cleanField(body.direction, 500);
+  const project = cleanField(body.project, 100);
+  let category = cleanField(body.category, 100);
+  if (category && !(category in PILLAR_LABELS)) category = undefined; // ignore unknown pillars
+
   const { draftsDir, repoRoot, lock, result } = paths();
   fs.mkdirSync(draftsDir, { recursive: true });
 
   const { running } = readRunning(lock);
   if (running) return NextResponse.json({ started: false, running: true });
 
-  const date = today();
+  const date = nowStamp();
   fs.writeFileSync(lock, String(Date.now()), "utf8");
 
   const script = path.join(repoRoot, "engine", "generate.sh");
   const child = spawn("bash", [script, "--force"], {
     cwd: repoRoot,
-    env: process.env,
+    env: {
+      ...process.env,
+      SHIPPOST_STAMP: date,
+      SHIPPOST_COMPANY_MODE: readSettings().companyMode ? "1" : "0",
+      ...(direction ? { SHIPPOST_FOCUS: direction } : {}),
+      ...(project ? { SHIPPOST_PROJECT: project } : {}),
+      ...(category ? { SHIPPOST_CATEGORY: category } : {}),
+    },
     stdio: "ignore",
   });
 

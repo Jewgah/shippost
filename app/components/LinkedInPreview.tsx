@@ -19,10 +19,16 @@ export default function LinkedInPreview({
   companyPost,
   brandName,
   hasLogo,
+  companyMode = true,
+  authorName = "",
+  hasAvatar = false,
 }: {
   companyPost: string;
   brandName: string;
   hasLogo: boolean;
+  companyMode?: boolean;
+  authorName?: string;
+  hasAvatar?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const lines = companyPost.split("\n");
@@ -30,19 +36,24 @@ export default function LinkedInPreview({
   const hasMore = companyPost.trim().length > firstLine.trim().length;
   const shown = open ? companyPost : firstLine;
 
+  // Company mode previews as the brand page; personal-only previews as the author.
+  const name = companyMode ? brandName || "Your Brand" : authorName || "You";
+  const hasImg = companyMode ? hasLogo : hasAvatar;
+  const imgSrc = companyMode ? "/api/asset?which=logo" : "/api/asset?which=avatar";
+
   return (
     <div className="rounded-lg border border-border bg-white text-[#1d1d1f] shadow-sm">
       <div className="flex items-center gap-2 px-3 pt-3">
-        {hasLogo ? (
+        {hasImg ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/api/asset?which=logo" alt="" className="h-9 w-9 rounded-full object-contain bg-white ring-1 ring-black/10" />
+          <img src={imgSrc} alt="" className="h-9 w-9 rounded-full object-contain bg-white ring-1 ring-black/10" />
         ) : (
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0a66c2] text-sm font-bold text-white">
-            {(brandName || "S").charAt(0).toUpperCase()}
+            {name.charAt(0).toUpperCase()}
           </div>
         )}
         <div className="leading-tight">
-          <div className="text-sm font-semibold">{brandName || "Your Brand"}</div>
+          <div className="text-sm font-semibold">{name}</div>
           <div className="text-[11px] text-[#666]">now · 🌐</div>
         </div>
       </div>

@@ -98,6 +98,9 @@ export CFG_SCHED_HOUR="$(_get '.schedule.hour' '9')"
 export CFG_SCHED_MINUTE="$(_get '.schedule.minute' '13')"
 export CFG_LAUNCHD_LABEL="$(_get '.schedule.launchdLabel' 'com.example.shippost')"
 
+# --- app (used by notify() to open the right URL on click) ---
+export CFG_APP_PORT="$(_get '.app.port' '3030')"
+
 # Convenience: where SKILL.md lives (for generate.sh to pass to claude).
 export CFG_SKILL_MD="$ENGINE_DIR/SKILL.md"
 export CFG_REPO_DIR="$REPO_DIR"

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { readDraft, getStatus } from "@/lib/drafts";
-import OptionCard from "@/components/OptionCard";
+import DraftCarousel from "@/components/DraftCarousel";
+import { formatDraftId } from "@/lib/draftId";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,8 @@ export default async function DraftPage({ params }: { params: Promise<{ date: st
       </Link>
 
       <div className="my-4">
-        <h1 className="font-mono text-lg text-fg">{draft.title || `Drafts — ${date}`}</h1>
+        <h1 className="font-mono text-lg text-fg">{draft.title || `Drafts — ${formatDraftId(date)}`}</h1>
+        <div className="mt-1 font-mono text-xs text-muted">{formatDraftId(date)}</div>
         {draft.instruction && (
           <p className="mt-2 rounded-lg border border-border bg-surface/60 px-3 py-2 text-xs text-muted">
             {draft.instruction}
@@ -27,18 +29,15 @@ export default async function DraftPage({ params }: { params: Promise<{ date: st
         )}
       </div>
 
-      <div className="space-y-4">
-        {draft.options.map((o, i) => (
-          <OptionCard
-            key={o.n || i}
-            option={o}
-            date={date}
-            brandName={status.brandName}
-            hasLogo={status.hasLogo}
-            index={i}
-          />
-        ))}
-      </div>
+      <DraftCarousel
+        options={draft.options}
+        date={date}
+        brandName={status.brandName}
+        hasLogo={status.hasLogo}
+        companyMode={status.companyMode}
+        authorName={status.authorName}
+        hasAvatar={status.hasAvatar}
+      />
 
       {draft.footer && (
         <details className="mt-6 text-xs text-muted">

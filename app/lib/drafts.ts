@@ -3,8 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config";
 import { parseDraft, type Draft } from "./draftParser";
-
-const DATED_RE = /^\d{4}-\d{2}-\d{2}\.md$/;
+import { isDraftId } from "./draftId";
+import { recentPostCount } from "./voice";
+import { effectiveLogoPath, readSettings, uploadedAvatarPath } from "./settings";
 
 export interface DraftSummary {
   date: string;
@@ -18,7 +19,7 @@ export function listDrafts(): DraftSummary[] {
   if (!fs.existsSync(resolved.draftsDir)) return [];
   const files = fs
     .readdirSync(resolved.draftsDir)
-    .filter((f) => DATED_RE.test(f))
+    .filter((f) => f.endsWith(".md") && isDraftId(f.slice(0, -3)))
     .sort()
     .reverse();
 
@@ -38,7 +39,7 @@ export function listDrafts(): DraftSummary[] {
 
 export function readDraft(date: string): Draft | null {
   const { resolved } = loadConfig();
-  if (!DATED_RE.test(`${date}.md`)) return null; // guard against path traversal
+  if (!isDraftId(date)) return null; // guard against path traversal
   const file = path.join(resolved.draftsDir, `${date}.md`);
   if (!fs.existsSync(file)) return null;
   return parseDraft(fs.readFileSync(file, "utf8"));
@@ -54,6 +55,9 @@ export interface Status {
   authorName: string;
   theme: string;
   hasLogo: boolean;
+  hasAvatar: boolean;
+  companyMode: boolean;
+  recentPostCount: number;
 }
 
 export function getStatus(): Status {
@@ -71,6 +75,9 @@ export function getStatus(): Status {
     brandName: c.brand.name,
     authorName: c.author.name,
     theme: c.app.theme,
-    hasLogo: Boolean(c.brand.logoPath) && fs.existsSync(c.brand.logoPath),
+    hasLogo: Boolean(effectiveLogoPath()),
+    hasAvatar: Boolean(uploadedAvatarPath()),
+    companyMode: readSettings().companyMode,
+    recentPostCount: recentPostCount(),
   };
 }
