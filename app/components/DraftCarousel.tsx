@@ -28,6 +28,10 @@ export default function DraftCarousel({
   const reduce = useReducedMotion();
   const railRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
+  // After an option is deleted the list shrinks; `active` may briefly point past the end until the
+  // next scroll recomputes it. Clamp for the counter and arrow-disabled states.
+  const lastIndex = Math.max(0, options.length - 1);
+  const safeActive = Math.min(active, lastIndex);
 
   const scrollToIndex = useCallback(
     (i: number) => {
@@ -72,13 +76,13 @@ export default function DraftCarousel({
     <div className="relative">
       {/* counter */}
       <div className="mb-3 text-xs text-muted">
-        <span className="font-mono text-fg">{active + 1}</span> / {options.length}
+        <span className="font-mono text-fg">{safeActive + 1}</span> / {options.length}
         <span className="ml-2 hidden sm:inline">· swipe or use ← →</span>
       </div>
 
       {/* rail flanked by big side arrows OUTSIDE the cards */}
       <div className="flex items-center gap-2 sm:gap-3">
-        <SideArrow dir="prev" disabled={active === 0} reduce={reduce} onClick={() => scrollToIndex(active - 1)} />
+        <SideArrow dir="prev" disabled={safeActive === 0} reduce={reduce} onClick={() => scrollToIndex(safeActive - 1)} />
         <div
           ref={railRef}
           onScroll={onScroll}
@@ -103,9 +107,9 @@ export default function DraftCarousel({
         </div>
         <SideArrow
           dir="next"
-          disabled={active === options.length - 1}
+          disabled={safeActive === lastIndex}
           reduce={reduce}
-          onClick={() => scrollToIndex(active + 1)}
+          onClick={() => scrollToIndex(safeActive + 1)}
         />
       </div>
 

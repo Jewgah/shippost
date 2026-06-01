@@ -44,6 +44,9 @@ export default function OptionCard({
   const [editPrompt, setEditPrompt] = useState("");
   const [editRunning, setEditRunning] = useState(false);
   const [editErr, setEditErr] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
 
   useEffect(
     () => () => {
@@ -146,6 +149,32 @@ export default function OptionCard({
     }
   };
 
+  // Delete this single option from the draft. If it was the last one, the whole package is gone
+  // server-side, so we leave the draft page rather than refresh into a 404.
+  const deleteOption = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteErr(null);
+    try {
+      const res = await fetch(`/api/drafts/${date}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ option: option.n }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDeleting(false);
+        setDeleteErr(j.error || "Couldn't delete this option.");
+        return;
+      }
+      if (j.draftDeleted) router.push("/"); // last option removed — the package no longer exists
+      else router.refresh(); // re-render the carousel without this option
+    } catch (e) {
+      setDeleting(false);
+      setDeleteErr(String((e as Error).message));
+    }
+  };
+
   const showLogoThumb = hasLogo && /logo/i.test(option.visual);
   const reduce = useReducedMotion();
 
@@ -188,8 +217,67 @@ export default function OptionCard({
               Edit with AI
             </button>
           )}
+          <button
+            onClick={() => {
+              setConfirmingDelete((v) => !v);
+              setDeleteErr(null);
+            }}
+            aria-label="Delete this option"
+            title="Delete this option"
+            className="inline-flex items-center rounded-md border border-border bg-elevated px-2 py-0.5 text-xs text-muted transition hover:border-red-400/60 hover:text-red-300"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-9 0v12a2 2 0 002 2h6a2 2 0 002-2V7M10 11v6M14 11v6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
         </span>
       </div>
+
+      <AnimatePresence initial={false}>
+        {confirmingDelete && (
+          <motion.div
+            initial={reduce ? false : { height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={reduce ? undefined : { height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className={`overflow-hidden ${bodyScroll ? "shrink-0" : ""}`}
+          >
+            <div className="mb-3 rounded-lg border border-red-400/40 bg-elevated p-3">
+              <p className="text-xs text-fg">
+                Delete option {option.n || "?"}? It&apos;s removed from this draft for good
+                {option.star ? " (this is the ⭐ top pick)" : ""}.
+              </p>
+              {deleteErr && <p className="mt-1 text-xs text-red-400">{deleteErr}</p>}
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setConfirmingDelete(false);
+                    setDeleteErr(null);
+                  }}
+                  disabled={deleting}
+                  className="rounded-md px-2.5 py-1 text-xs text-muted transition hover:text-fg disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <motion.button
+                  onClick={deleteOption}
+                  disabled={deleting}
+                  whileTap={reduce || deleting ? undefined : { scale: 0.96 }}
+                  className="rounded-md border border-red-400/50 bg-red-500/15 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/25 disabled:opacity-50"
+                >
+                  {deleting ? "Deleting…" : "Delete option"}
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence initial={false}>
         {editing && (

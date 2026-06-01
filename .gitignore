@@ -10,8 +10,10 @@ voice-sample.md
 *.launchd.out.log
 *.launchd.err.log
 
-# Generated drafts (if the drafts dir ever lives inside the repo)
-drafts/
+# Generated drafts (if the drafts dir ever lives inside the repo).
+# Anchored to the repo root so it ignores ONLY the top-level data dir — an unanchored
+# `drafts/` also matched app/app/api/drafts/ and silently un-tracked the drafts API routes.
+/drafts/
 *.draft.md
 
 # ─── Node / Next.js ───

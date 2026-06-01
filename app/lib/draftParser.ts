@@ -218,3 +218,41 @@ export function parseDraftMeta(md: string): DraftMeta {
   const { date, blocks } = splitDraft(md);
   return { date, options: blocks.map((b) => parseHeader(b.header)) };
 }
+
+/**
+ * Remove one option block (by its Option number) from raw draft markdown, leaving the title,
+ * instruction, the other option blocks, and footer intact. Block boundaries use the SAME rules
+ * as splitDraft (a `## `/`### ` line starts an option; the first FOOTER_RE line starts the
+ * footer) so the two can never disagree about where an option begins or ends. Every option block
+ * carries its own trailing `---` rule, so removing the line span [start, nextStart) also takes
+ * that block's separator and never orphans one. Returns the rewritten markdown, how many option
+ * blocks remain, and whether a block was actually removed (false ⇒ no such option, md unchanged).
+ */
+export function removeOptionFromMarkdown(
+  md: string,
+  n: number
+): { md: string; remaining: number; removed: boolean } {
+  const lines = md.split(/\r?\n/);
+  const optionStarts: number[] = [];
+  let footerStart = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    if (FOOTER_RE.test(lines[i])) {
+      footerStart = i; // the footer claims the rest of the file — options never follow it
+      break;
+    }
+    if (/^#{2,3}\s+/.test(lines[i])) optionStarts.push(i);
+  }
+
+  // Match the target on the same header parse the rest of the app uses, so "delete Option 3"
+  // hits exactly the block the UI labelled Option 3.
+  const target = optionStarts.findIndex((start) => {
+    const h = parseHeader(lines[start]);
+    return h.parsedHeader && h.n === n;
+  });
+  if (target === -1) return { md, remaining: optionStarts.length, removed: false };
+
+  const start = optionStarts[target];
+  const end = target + 1 < optionStarts.length ? optionStarts[target + 1] : footerStart;
+  const kept = [...lines.slice(0, start), ...lines.slice(end)];
+  return { md: kept.join("\n"), remaining: optionStarts.length - 1, removed: true };
+}

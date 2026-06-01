@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseDraft, parseDraftMeta } from "@/lib/draftParser";
+import { parseDraft, parseDraftMeta, removeOptionFromMarkdown } from "@/lib/draftParser";
 
 const WELL_FORMED = `# LinkedIn drafts — 2026-05-31 · 5 options, ranked · pick ONE
 
@@ -164,4 +164,58 @@ pillars used: lesson
   it("matches on a well-formed draft", () => sameHeaders(WELL_FORMED));
   it("matches on a malformed block (header parses, body missing)", () => sameHeaders(MALFORMED));
   it("matches on empty input", () => sameHeaders(""));
+});
+
+describe("removeOptionFromMarkdown — splices one option, keeps everything else parseable", () => {
+  it("removes a middle/last option and leaves the rest + footer intact", () => {
+    const { md, remaining, removed } = removeOptionFromMarkdown(WELL_FORMED, 2);
+    expect(removed).toBe(true);
+    expect(remaining).toBe(1);
+    const d = parseDraft(md);
+    expect(d.options).toHaveLength(1);
+    expect(d.options[0].n).toBe(1); // surviving option keeps its identity (no renumbering)
+    expect(d.options[0].topic).toBe("multi-agent review");
+    expect(d.footer).toContain("pillars used:"); // footer survives removing the last option
+    expect(md).not.toContain("## Option 2"); // the option's header + body are gone…
+    expect(md).not.toContain("Second post body.");
+    expect(md).toContain("currency formatter"); // …though the footer's sources line still names it
+  });
+
+  it("removes the first option without orphaning a leading separator", () => {
+    const { md, remaining } = removeOptionFromMarkdown(WELL_FORMED, 1);
+    expect(remaining).toBe(1);
+    const d = parseDraft(md);
+    expect(d.options).toHaveLength(1);
+    expect(d.options[0].n).toBe(2);
+    expect(d.title).toContain("LinkedIn drafts"); // title + instruction preamble untouched
+    // the surviving block still parses fully (separator handling didn't corrupt its body)
+    expect(d.options[0].parsed).toBe(true);
+    expect(d.options[0].companyPost).toContain("Second post body.");
+  });
+
+  it("reports remaining=0 when the only option is removed (caller deletes the file)", () => {
+    const ONE = `# LinkedIn drafts — 2026-05-29
+
+## ⭐ Option 1 — lesson — solo   (9.0/10)
+**A. Company post**
+Body.
+
+**B. Repost caption (your profile)**
+Cap.
+
+_Why it works:_ x.
+_Suggested visuals:_
+1. screenshot (screenshot — no AI)
+`;
+    const { remaining, removed } = removeOptionFromMarkdown(ONE, 1);
+    expect(removed).toBe(true);
+    expect(remaining).toBe(0);
+  });
+
+  it("is a no-op for an option number that doesn't exist", () => {
+    const { md, remaining, removed } = removeOptionFromMarkdown(WELL_FORMED, 9);
+    expect(removed).toBe(false);
+    expect(remaining).toBe(2);
+    expect(md).toBe(WELL_FORMED); // unchanged
+  });
 });

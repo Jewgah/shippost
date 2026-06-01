@@ -2,7 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config";
-import { parseDraft, parseDraftMeta, type Draft } from "./draftParser";
+import { parseDraft, parseDraftMeta, removeOptionFromMarkdown, type Draft } from "./draftParser";
 import { isDraftId } from "./draftId";
 import { recentPostCount, pickedOptionsByDraftId } from "./voice";
 import { effectiveLogoPath, readSettings, uploadedAvatarPath } from "./settings";
@@ -67,6 +67,44 @@ export function readDraft(date: string): Draft | null {
   const file = path.join(resolved.draftsDir, `${date}.md`);
   if (!fs.existsSync(file)) return null;
   return parseDraft(fs.readFileSync(file, "utf8"));
+}
+
+/**
+ * Delete an entire draft package (the dated .md file). The picks/rejects logs are left untouched
+ * on purpose: a pick already fed the voice corpus and counts toward your streak, and a logged
+ * reject still teaches future runs which angles to avoid — neither should vanish because you
+ * cleared a card. Returns true if a file was removed, false if it was already gone or the id is
+ * malformed (the same path-traversal guard readDraft uses).
+ */
+export function deleteDraft(date: string): boolean {
+  if (!isDraftId(date)) return false;
+  const { resolved } = loadConfig();
+  const file = path.join(resolved.draftsDir, `${date}.md`);
+  if (!fs.existsSync(file)) return false;
+  fs.rmSync(file);
+  return true;
+}
+
+/**
+ * Remove a single option from a draft, rewriting the file in place. Options are NOT renumbered:
+ * the option number is an identity the picks/rejects logs and the edit route join on, so deleting
+ * Option 2 leaves 1, 3, 4, 5. If the removed option was the last one, the whole draft file is
+ * deleted instead of leaving an empty husk. Returns the option count left and whether the package
+ * itself was deleted, or null if the draft/option wasn't found.
+ */
+export function deleteOption(date: string, option: number): { remaining: number; draftDeleted: boolean } | null {
+  if (!isDraftId(date)) return null;
+  const { resolved } = loadConfig();
+  const file = path.join(resolved.draftsDir, `${date}.md`);
+  if (!fs.existsSync(file)) return null;
+  const { md, remaining, removed } = removeOptionFromMarkdown(fs.readFileSync(file, "utf8"), option);
+  if (!removed) return null;
+  if (remaining === 0) {
+    fs.rmSync(file);
+    return { remaining: 0, draftDeleted: true };
+  }
+  fs.writeFileSync(file, md, "utf8");
+  return { remaining, draftDeleted: false };
 }
 
 export interface Status {
