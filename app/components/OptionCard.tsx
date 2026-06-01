@@ -30,6 +30,7 @@ export default function OptionCard({
 }) {
   const [posted, setPosted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [postErr, setPostErr] = useState<string | null>(null);
 
   const router = useRouter();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -88,6 +89,7 @@ export default function OptionCard({
 
   const markPosted = async () => {
     setBusy(true);
+    setPostErr(null);
     try {
       const res = await fetch("/api/pick", {
         method: "POST",
@@ -101,7 +103,14 @@ export default function OptionCard({
           repostCaption: option.repostCaption,
         }),
       });
-      if (res.ok) setPosted(true);
+      if (res.ok) {
+        setPosted(true);
+      } else {
+        const j = await res.json().catch(() => ({}));
+        setPostErr(j.error || "Couldn't save this pick — try again.");
+      }
+    } catch (e) {
+      setPostErr(String((e as Error).message));
     } finally {
       setBusy(false);
     }
@@ -272,6 +281,7 @@ export default function OptionCard({
                 </motion.span>
               </AnimatePresence>
             </motion.button>
+            {postErr && <p className="mt-1 text-xs text-red-400">{postErr}</p>}
           </div>
         </div>
       )}

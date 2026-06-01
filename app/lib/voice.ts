@@ -71,6 +71,37 @@ export function recordPick(args: {
   if (args.companyPost?.trim()) addRecentPosts([args.companyPost]);
 }
 
+/**
+ * Read the append-only picks log back into a map of draft id → posted option numbers.
+ * Join key is the EXACT draft id recorded by recordPick (the full id, incl. _HHMMSS) — not a
+ * date prefix — so same-day runs don't bleed into each other. Tolerates a partial/garbage last
+ * line (the log is appended to, never rewritten). Returns {} if the log doesn't exist yet.
+ */
+export function pickedOptionsByDraftId(): Record<string, number[]> {
+  const { resolved } = loadConfig();
+  if (!fs.existsSync(resolved.picksLogPath)) return {};
+  const out: Record<string, number[]> = {};
+  const raw = fs.readFileSync(resolved.picksLogPath, "utf8");
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(t);
+    } catch {
+      continue; // skip a malformed/partial line rather than failing the whole list
+    }
+    // JSON.parse can succeed with null/scalar/array (e.g. a line that is literally `null`),
+    // so guard for an object before touching properties — otherwise `.date` on null throws.
+    if (!parsed || typeof parsed !== "object") continue;
+    const e = parsed as { date?: unknown; option?: unknown };
+    if (typeof e.date !== "string" || typeof e.option !== "number") continue;
+    const arr = out[e.date] ?? (out[e.date] = []);
+    if (!arr.includes(e.option)) arr.push(e.option); // dedupe re-posts of the same option
+  }
+  return out;
+}
+
 export function markOnboarded(): void {
   ensureDir();
   const { resolved } = loadConfig();

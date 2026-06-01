@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseDraft } from "@/lib/draftParser";
+import { parseDraft, parseDraftMeta } from "@/lib/draftParser";
 
 const WELL_FORMED = `# LinkedIn drafts — 2026-05-31 · 5 options, ranked · pick ONE
 
@@ -132,4 +132,36 @@ some freeform text without the A/B structure
     expect(() => parseDraft("")).not.toThrow();
     expect(parseDraft("").options).toHaveLength(0);
   });
+});
+
+describe("parseDraftMeta — agrees with parseDraft on header fields", () => {
+  const MALFORMED = `# LinkedIn drafts — 2026-05-29
+
+## Option 1 — lesson — broken
+some freeform text without the A/B structure
+
+---
+pillars used: lesson
+`;
+
+  // parseDraftMeta is the lightweight (header-only) parse used by the drafts list. It must
+  // never disagree with the full parse on which blocks are options or on their core fields,
+  // otherwise the list would show a different count/topic than the draft page.
+  const sameHeaders = (md: string) => {
+    const full = parseDraft(md);
+    const meta = parseDraftMeta(md);
+    expect(meta.date).toBe(full.date);
+    expect(meta.options).toHaveLength(full.options.length);
+    full.options.forEach((o, i) => {
+      expect(meta.options[i].n).toBe(o.n);
+      expect(meta.options[i].star).toBe(o.star);
+      expect(meta.options[i].pillar).toBe(o.pillar);
+      expect(meta.options[i].topic).toBe(o.topic);
+      expect(meta.options[i].score).toBe(o.score);
+    });
+  };
+
+  it("matches on a well-formed draft", () => sameHeaders(WELL_FORMED));
+  it("matches on a malformed block (header parses, body missing)", () => sameHeaders(MALFORMED));
+  it("matches on empty input", () => sameHeaders(""));
 });

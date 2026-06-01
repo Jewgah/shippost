@@ -24,6 +24,22 @@ export interface Draft {
   footer: string;
 }
 
+// Header-only view of an option — everything that lives on the `## Option N — pillar — topic (score)`
+// line, without parsing the post bodies. Used by the drafts list, which never needs the post text.
+export interface DraftOptionMeta {
+  n: number;
+  star: boolean;
+  pillar: string;
+  topic: string;
+  score: number | null;
+  parsedHeader: boolean;
+}
+
+export interface DraftMeta {
+  date: string | null;
+  options: DraftOptionMeta[];
+}
+
 const EMDASH = "—";
 // Separators are " — " (space-dash-space). Requiring surrounding whitespace is
 // essential so the internal hyphens in pillar names (smart-ai-workflow,
@@ -54,30 +70,23 @@ export function humanizeText(s: string): string {
     .replace(/[ \t]{2,}/g, " ");
 }
 
+// The single source of truth for reading an option's header line. Both the full parse
+// and the lightweight meta parse go through here so they can never disagree on which
+// `##` lines are options or on their pillar/topic/score/star.
+function parseHeader(headerLine: string): DraftOptionMeta {
+  let m = HEADER_RE.exec(headerLine);
+  if (m) {
+    return { star: Boolean(m[1]), n: parseInt(m[2], 10), pillar: m[3].trim(), topic: m[4].trim(), score: parseFloat(m[5]), parsedHeader: true };
+  }
+  if ((m = HEADER_RE_NOSCORE.exec(headerLine))) {
+    return { star: Boolean(m[1]), n: parseInt(m[2], 10), pillar: m[3].trim(), topic: m[4].trim(), score: null, parsedHeader: true };
+  }
+  return { n: 0, star: false, pillar: "", topic: "", score: null, parsedHeader: false };
+}
+
 function parseOptionBlock(headerLine: string, body: string[]): DraftOption {
   const raw = [headerLine, ...body].join("\n").trim();
-  let m = HEADER_RE.exec(headerLine);
-  let score: number | null = null;
-  let star = false;
-  let n = 0;
-  let pillar = "";
-  let topic = "";
-  let parsedHeader = true;
-
-  if (m) {
-    star = Boolean(m[1]);
-    n = parseInt(m[2], 10);
-    pillar = m[3].trim();
-    topic = m[4].trim();
-    score = parseFloat(m[5]);
-  } else if ((m = HEADER_RE_NOSCORE.exec(headerLine))) {
-    star = Boolean(m[1]);
-    n = parseInt(m[2], 10);
-    pillar = m[3].trim();
-    topic = m[4].trim();
-  } else {
-    parsedHeader = false;
-  }
+  const h = parseHeader(headerLine);
 
   // Sub-section extraction. Humanize ONLY the published post text (A & B).
   const text = body.join("\n");
@@ -90,9 +99,9 @@ function parseOptionBlock(headerLine: string, body: string[]): DraftOption {
   const why = extractLine(text, /^_Why it works:_\s*(.*)$/im);
   const visual = extractVisuals(text);
 
-  const parsed = parsedHeader && companyPost.length > 0;
+  const parsed = h.parsedHeader && companyPost.length > 0;
 
-  return { n, star, pillar, topic, score, companyPost, repostCaption, why, visual, raw, parsed };
+  return { n: h.n, star: h.star, pillar: h.pillar, topic: h.topic, score: h.score, companyPost, repostCaption, why, visual, raw, parsed };
 }
 
 function stripTrailingRule(s: string): string {
@@ -124,12 +133,26 @@ function extractVisuals(text: string): string {
   return stripTrailingRule((inline ? inline + "\n" : "") + after).trim();
 }
 
-export function parseDraft(md: string): Draft {
+interface RawBlock {
+  header: string;
+  body: string[];
+}
+
+// Splits raw draft markdown into its structural parts (title/date, instruction, the raw
+// option blocks, footer). This is the ONE place that decides where options begin/end and
+// where the footer starts — shared by parseDraft and parseDraftMeta so they never diverge.
+function splitDraft(md: string): {
+  title: string;
+  date: string | null;
+  instruction: string;
+  blocks: RawBlock[];
+  footer: string;
+} {
   const lines = md.split(/\r?\n/);
   let title = "";
   let date: string | null = null;
   const instruction: string[] = [];
-  const options: DraftOption[] = [];
+  const blocks: RawBlock[] = [];
   const footerLines: string[] = [];
 
   let inFooter = false;
@@ -138,7 +161,7 @@ export function parseDraft(md: string): Draft {
   let seenFirstOption = false;
 
   const flush = () => {
-    if (curHeader !== null) options.push(parseOptionBlock(curHeader, curBody));
+    if (curHeader !== null) blocks.push({ header: curHeader, body: curBody });
     curHeader = null;
     curBody = [];
   };
@@ -175,11 +198,23 @@ export function parseDraft(md: string): Draft {
   }
   flush();
 
+  return { title, date, instruction: instruction.join("\n").trim(), blocks, footer: footerLines.join("\n").trim() };
+}
+
+export function parseDraft(md: string): Draft {
+  const { title, date, instruction, blocks, footer } = splitDraft(md);
   return {
     date,
     title,
-    instruction: instruction.join("\n").trim(),
-    options,
-    footer: footerLines.join("\n").trim(),
+    instruction,
+    options: blocks.map((b) => parseOptionBlock(b.header, b.body)),
+    footer,
   };
+}
+
+// Lightweight parse for the drafts list: option headers only, no post-body extraction or
+// humanizing. Same option boundaries and header regexes as parseDraft (via splitDraft/parseHeader).
+export function parseDraftMeta(md: string): DraftMeta {
+  const { date, blocks } = splitDraft(md);
+  return { date, options: blocks.map((b) => parseHeader(b.header)) };
 }

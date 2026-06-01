@@ -2,9 +2,9 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config";
-import { parseDraft, type Draft } from "./draftParser";
+import { parseDraft, parseDraftMeta, type Draft } from "./draftParser";
 import { isDraftId } from "./draftId";
-import { recentPostCount } from "./voice";
+import { recentPostCount, pickedOptionsByDraftId } from "./voice";
 import { effectiveLogoPath, readSettings, uploadedAvatarPath } from "./settings";
 
 export interface DraftSummary {
@@ -12,6 +12,10 @@ export interface DraftSummary {
   optionCount: number;
   pillars: string[];
   topPick: string | null;
+  topScore: number | null;
+  topics: string[];
+  /** Option numbers the author marked "I posted this" for this run (deduped). Empty = unused. */
+  postedOptions: number[];
 }
 
 export function listDrafts(): DraftSummary[] {
@@ -23,16 +27,25 @@ export function listDrafts(): DraftSummary[] {
     .sort()
     .reverse();
 
+  const picked = pickedOptionsByDraftId(); // read the picks log once for the whole list
+
   return files.map((f) => {
     const md = fs.readFileSync(path.join(resolved.draftsDir, f), "utf8");
-    const d = parseDraft(md);
+    const d = parseDraftMeta(md); // headers only — the list never needs post bodies
+    const id = f.replace(/\.md$/, "");
     const pillars = Array.from(new Set(d.options.map((o) => o.pillar).filter(Boolean)));
     const top = d.options.find((o) => o.star) ?? d.options[0];
+    // Topics in ranked order (Option 1 first) — the only thing that meaningfully
+    // distinguishes one run from another. Pillars repeat almost every run.
+    const topics = d.options.map((o) => o.topic.trim()).filter(Boolean);
     return {
-      date: f.replace(/\.md$/, ""),
+      date: id,
       optionCount: d.options.length,
       pillars,
-      topPick: top ? top.topic : null,
+      topPick: top?.topic.trim() || null,
+      topScore: top?.score ?? null,
+      topics,
+      postedOptions: picked[id] ?? [],
     };
   });
 }
