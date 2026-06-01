@@ -147,6 +147,20 @@ while IFS= read -r d; do
 done < <(ls -1t "$BOOST_DIR"/*.md 2>/dev/null | head -"$CFG_RECENT_DRAFTS")
 [ "$found" -eq 0 ] && echo "  (none yet — this is the first run)"
 
+# ---------- REJECTED ANGLES: options the author thumbed down in the app ----------
+# Written by the app's "Not for me" button to .rejects.jsonl (one JSON object per line).
+# We surface the recent rejected topics so the model avoids them and close variants.
+REJECTS_LOG="$BOOST_DIR/.rejects.jsonl"
+if [ -f "$REJECTS_LOG" ]; then
+  # length<=120 guards against a pathological topic bloating (or injecting structure into) the prompt
+  rejected="$(tail -n 60 "$REJECTS_LOG" 2>/dev/null | jq -r '.topic // empty' 2>/dev/null | awk 'NF && length<=120' | sort -u)"
+  if [ -n "$rejected" ]; then
+    echo
+    echo "### REJECTED ANGLES — the author thumbed these down; do NOT offer them again or close variants"
+    printf '%s\n' "$rejected" | sed 's/^/  - /'
+  fi
+fi
+
 # ---------- YOUR RECENT LINKEDIN POSTS (capped) ----------
 # FIX: only inject the last N posts so this can't grow unbounded and flood the prompt.
 if [ -f "$RECENT_POSTS" ]; then

@@ -20,6 +20,7 @@ export interface ShippostConfig {
     recentPostsPath: string;
     voiceSamplePath: string;
     picksLogPath: string;
+    rejectsLogPath: string;
     onboardedMarker: string;
     logoPath: string;
     repoRoot: string;
@@ -72,6 +73,7 @@ export function loadConfig(): ShippostConfig {
       recentPostsPath: path.join(draftsDir, output.recentPostsFile),
       voiceSamplePath: path.join(draftsDir, output.voiceSampleFile),
       picksLogPath: path.join(draftsDir, output.picksLogFile),
+      rejectsLogPath: path.join(draftsDir, ".rejects.jsonl"),
       onboardedMarker: path.join(draftsDir, ".onboarded"),
       logoPath: brand.logoPath,
       repoRoot: findRepoRoot(),

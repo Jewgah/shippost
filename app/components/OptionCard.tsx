@@ -17,6 +17,7 @@ export default function OptionCard({
   companyMode = true,
   authorName = "",
   hasAvatar = false,
+  initiallyRejected = false,
 }: {
   option: DraftOption;
   date: string;
@@ -27,10 +28,15 @@ export default function OptionCard({
   companyMode?: boolean;
   authorName?: string;
   hasAvatar?: boolean;
+  initiallyRejected?: boolean;
 }) {
   const [posted, setPosted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [postErr, setPostErr] = useState<string | null>(null);
+  // Seeded from the rejects log so a thumbed-down option stays marked across reloads.
+  const [rejected, setRejected] = useState(initiallyRejected);
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectErr, setRejectErr] = useState<string | null>(null);
 
   const router = useRouter();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -113,6 +119,30 @@ export default function OptionCard({
       setPostErr(String((e as Error).message));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Thumbs-down: logs the option so future generations avoid this angle. Not added to the
+  // voice corpus (rejects teach the engine what NOT to write).
+  const markRejected = async () => {
+    setRejecting(true);
+    setRejectErr(null);
+    try {
+      const res = await fetch("/api/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, option: option.n, pillar: option.pillar, topic: option.topic }),
+      });
+      if (res.ok) {
+        setRejected(true);
+      } else {
+        const j = await res.json().catch(() => ({}));
+        setRejectErr(j.error || "Couldn't save this — try again.");
+      }
+    } catch (e) {
+      setRejectErr(String((e as Error).message));
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -256,32 +286,55 @@ export default function OptionCard({
           )}
 
           <div className="pt-1">
-            <motion.button
-              onClick={markPosted}
-              disabled={busy || posted}
-              whileTap={reduce || posted ? undefined : { scale: 0.96 }}
-              animate={posted && !reduce ? { scale: [1, 1.06, 1] } : undefined}
-              transition={{ duration: 0.32, ease: "easeOut" }}
-              className={`overflow-hidden rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                posted
-                  ? "bg-good/15 text-good"
-                  : "border border-border bg-elevated text-fg hover:border-accent hover:text-accent"
-              }`}
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.span
-                  key={posted ? "posted" : busy ? "busy" : "idle"}
-                  initial={reduce ? false : { opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={reduce ? undefined : { opacity: 0, y: -5 }}
-                  transition={{ duration: 0.2 }}
-                  className="inline-block"
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Post and reject are mutually exclusive terminal states; while either is
+                  in flight the other is disabled so the same option can't land in both logs. */}
+              {!rejected && (
+                <motion.button
+                  onClick={markPosted}
+                  disabled={busy || posted || rejecting}
+                  whileTap={reduce || posted ? undefined : { scale: 0.96 }}
+                  animate={posted && !reduce ? { scale: [1, 1.06, 1] } : undefined}
+                  transition={{ duration: 0.32, ease: "easeOut" }}
+                  className={`overflow-hidden rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 ${
+                    posted
+                      ? "bg-good/15 text-good"
+                      : "border border-border bg-elevated text-fg hover:border-accent hover:text-accent"
+                  }`}
                 >
-                  {posted ? "✓ posted — added to your voice corpus" : busy ? "saving…" : "✓ I posted this"}
-                </motion.span>
-              </AnimatePresence>
-            </motion.button>
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.span
+                      key={posted ? "posted" : busy ? "busy" : "idle"}
+                      initial={reduce ? false : { opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={reduce ? undefined : { opacity: 0, y: -5 }}
+                      transition={{ duration: 0.2 }}
+                      className="inline-block"
+                    >
+                      {posted ? "✓ posted — added to your voice corpus" : busy ? "saving…" : "✓ I posted this"}
+                    </motion.span>
+                  </AnimatePresence>
+                </motion.button>
+              )}
+
+              {!posted && (
+                <motion.button
+                  onClick={markRejected}
+                  disabled={rejecting || rejected || busy}
+                  whileTap={reduce || rejected ? undefined : { scale: 0.96 }}
+                  title="Don't suggest this angle again — future runs will avoid it"
+                  className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-60 ${
+                    rejected
+                      ? "bg-elevated text-muted"
+                      : "border border-border bg-elevated text-muted hover:border-red-400/60 hover:text-red-300"
+                  }`}
+                >
+                  {rejected ? "✕ won't suggest again" : rejecting ? "saving…" : "Not for me"}
+                </motion.button>
+              )}
+            </div>
             {postErr && <p className="mt-1 text-xs text-red-400">{postErr}</p>}
+            {rejectErr && <p className="mt-1 text-xs text-red-400">{rejectErr}</p>}
           </div>
         </div>
       )}

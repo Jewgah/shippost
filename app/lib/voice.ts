@@ -49,6 +49,65 @@ export function recentPostCount(): number {
   return readBlocks(resolved.recentPostsPath).length;
 }
 
+interface LogEntry {
+  date: string; // the EXACT draft id (incl. _HHMMSS), as recorded
+  option: number;
+  pillar: string;
+  topic: string;
+  ts: string; // ISO timestamp; "" if a legacy/garbage line had none
+}
+
+/**
+ * Append one JSON line to a JSONL log, then cap it. The common path is a plain append (which
+ * never risks more than a torn last line); only when the log has actually grown past `cap` do we
+ * rewrite a trimmed copy — so the one op that could truncate history on a crash happens seldom.
+ */
+function appendCappedJsonl(file: string, obj: unknown, cap: number): void {
+  fs.appendFileSync(file, JSON.stringify(obj) + "\n", "utf8");
+  const lines = fs.readFileSync(file, "utf8").split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length > cap) fs.writeFileSync(file, lines.slice(-cap).join("\n") + "\n", "utf8");
+}
+
+/**
+ * Read a picks/rejects JSONL log into typed entries. Tolerates blank, malformed/partial, and
+ * valid-JSON-but-non-object lines (e.g. a literal `null`) without throwing. Requires a string
+ * date + numeric option; pillar/topic/ts are best-effort. Returns [] if the file is absent.
+ */
+function readLogEntries(file: string): LogEntry[] {
+  if (!fs.existsSync(file)) return [];
+  const out: LogEntry[] = [];
+  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(t);
+    } catch {
+      continue; // skip a malformed/partial line rather than failing the whole read
+    }
+    if (!parsed || typeof parsed !== "object") continue; // guard before property access
+    const e = parsed as { date?: unknown; option?: unknown; pillar?: unknown; topic?: unknown; ts?: unknown };
+    if (typeof e.date !== "string" || typeof e.option !== "number") continue;
+    out.push({
+      date: e.date,
+      option: e.option,
+      pillar: typeof e.pillar === "string" ? e.pillar : "",
+      topic: typeof e.topic === "string" ? e.topic : "",
+      ts: typeof e.ts === "string" ? e.ts : "",
+    });
+  }
+  return out;
+}
+
+function groupOptionsByDraftId(entries: LogEntry[]): Record<string, number[]> {
+  const out: Record<string, number[]> = {};
+  for (const e of entries) {
+    const arr = out[e.date] ?? (out[e.date] = []);
+    if (!arr.includes(e.option)) arr.push(e.option); // dedupe repeats of the same option
+  }
+  return out;
+}
+
 /** Record that the author published a given option: log it + add it to the voice corpus. */
 export function recordPick(args: {
   date: string;
@@ -60,65 +119,27 @@ export function recordPick(args: {
 }): void {
   ensureDir();
   const { resolved } = loadConfig();
-  const entry = {
-    ts: new Date().toISOString(),
-    date: args.date,
-    option: args.option,
-    pillar: args.pillar,
-    topic: args.topic,
-  };
-  // Append in the common case (a plain append never risks more than a torn last line). Only
-  // when the log has actually grown past the cap do we rewrite a trimmed copy — so the rare
-  // whole-file rewrite, the only op that could truncate history on a crash, happens seldom.
-  fs.appendFileSync(resolved.picksLogPath, JSON.stringify(entry) + "\n", "utf8");
-  const lines = fs.readFileSync(resolved.picksLogPath, "utf8").split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length > PICKS_CAP) {
-    fs.writeFileSync(resolved.picksLogPath, lines.slice(-PICKS_CAP).join("\n") + "\n", "utf8");
-  }
+  appendCappedJsonl(
+    resolved.picksLogPath,
+    { ts: new Date().toISOString(), date: args.date, option: args.option, pillar: args.pillar, topic: args.topic },
+    PICKS_CAP
+  );
   // Add the published company post to the voice corpus so future runs match it.
   if (args.companyPost?.trim()) addRecentPosts([args.companyPost]);
 }
 
-interface PickEntry {
-  date: string; // the EXACT draft id (incl. _HHMMSS), as recorded by recordPick
-  option: number;
-  ts: string; // ISO timestamp; "" if a legacy/garbage line had none
-}
-
 /**
- * The one place that reads the append-only picks log back into typed entries. Tolerates blank,
- * malformed/partial, and valid-JSON-but-non-object lines (e.g. a literal `null`) without throwing.
- * Requires a string date + numeric option; ts is best-effort. Returns [] if the log is absent.
+ * Record that the author thumbed an option down. Logged (not added to the voice corpus) so the
+ * harvest can tell future runs to avoid these angles. Same exact-id join + cap as picks.
  */
-function readPickEntries(): PickEntry[] {
+export function recordReject(args: { date: string; option: number; pillar: string; topic: string }): void {
+  ensureDir();
   const { resolved } = loadConfig();
-  if (!fs.existsSync(resolved.picksLogPath)) return [];
-  const out: PickEntry[] = [];
-  const raw = fs.readFileSync(resolved.picksLogPath, "utf8");
-  for (const line of raw.split(/\r?\n/)) {
-    const t = line.trim();
-    if (!t) continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(t);
-    } catch {
-      continue; // skip a malformed/partial line rather than failing the whole read
-    }
-    if (!parsed || typeof parsed !== "object") continue; // guard before property access
-    const e = parsed as { date?: unknown; option?: unknown; ts?: unknown };
-    if (typeof e.date !== "string" || typeof e.option !== "number") continue;
-    out.push({ date: e.date, option: e.option, ts: typeof e.ts === "string" ? e.ts : "" });
-  }
-  return out;
-}
-
-function groupOptionsByDraftId(entries: PickEntry[]): Record<string, number[]> {
-  const out: Record<string, number[]> = {};
-  for (const e of entries) {
-    const arr = out[e.date] ?? (out[e.date] = []);
-    if (!arr.includes(e.option)) arr.push(e.option); // dedupe re-posts of the same option
-  }
-  return out;
+  appendCappedJsonl(
+    resolved.rejectsLogPath,
+    { ts: new Date().toISOString(), date: args.date, option: args.option, pillar: args.pillar, topic: args.topic },
+    PICKS_CAP
+  );
 }
 
 /**
@@ -126,7 +147,14 @@ function groupOptionsByDraftId(entries: PickEntry[]): Record<string, number[]> {
  * (2026-05-31_185437 vs _190218) don't bleed into each other.
  */
 export function pickedOptionsByDraftId(): Record<string, number[]> {
-  return groupOptionsByDraftId(readPickEntries());
+  const { resolved } = loadConfig();
+  return groupOptionsByDraftId(readLogEntries(resolved.picksLogPath));
+}
+
+/** Map of draft id → rejected option numbers, for showing what you've already dismissed. */
+export function rejectedOptionsByDraftId(): Record<string, number[]> {
+  const { resolved } = loadConfig();
+  return groupOptionsByDraftId(readLogEntries(resolved.rejectsLogPath));
 }
 
 /**
@@ -134,7 +162,8 @@ export function pickedOptionsByDraftId(): Record<string, number[]> {
  * needs both, so this avoids reading/parsing the log twice per render.
  */
 export function pickData(): { pickedByDraftId: Record<string, number[]>; cadence: Cadence } {
-  const entries = readPickEntries();
+  const { resolved } = loadConfig();
+  const entries = readLogEntries(resolved.picksLogPath);
   const stamps = entries.map((e) => Date.parse(e.ts)).filter((ms) => Number.isFinite(ms));
   return { pickedByDraftId: groupOptionsByDraftId(entries), cadence: computeCadence(stamps, Date.now()) };
 }

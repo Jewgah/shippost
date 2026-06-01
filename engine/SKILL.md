@@ -24,6 +24,7 @@ Read all of it:
 - recent commits (subjects + bodies + files) in the allowlisted repos,
 - the inventory of the author's custom Claude Code skills,
 - the last few drafts (avoid repeating those topics),
+- **REJECTED ANGLES** (if present): topics the author thumbed down in the app — never offer these or close variants,
 - **YOUR RECENT LINKEDIN POSTS** (if present): match that voice and do **not** repeat those themes,
 - an optional voice sample.
 
@@ -40,7 +41,7 @@ Brainstorm **~10 candidate angles** across all four pillars:
 
 ## Step 3 — Select 5 DISTINCT
 
-Pick the 5 strongest, with **different topics** and **≥3 pillars** of spread. Don't repeat topics shown in "RECENT DRAFTS". **Quality beats spread** — 5 strong posts across 3 pillars beat 5 forced across 4. Never invent a "cool-repo" you didn't try just to fill a slot.
+Pick the 5 strongest, with **different topics** and **≥3 pillars** of spread. Don't repeat topics shown in "RECENT DRAFTS", and never offer an angle listed under "REJECTED ANGLES" (the author already thumbed it down). **Quality beats spread** — 5 strong posts across 3 pillars beat 5 forced across 4. Never invent a "cool-repo" you didn't try just to fill a slot.
 
 ## Step 4 — SCRUB (every option, even your own repos)
 

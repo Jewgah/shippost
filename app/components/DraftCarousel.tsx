@@ -14,6 +14,7 @@ export default function DraftCarousel({
   companyMode,
   authorName,
   hasAvatar,
+  rejectedOptions = [],
 }: {
   options: DraftOption[];
   date: string;
@@ -22,6 +23,7 @@ export default function DraftCarousel({
   companyMode: boolean;
   authorName: string;
   hasAvatar: boolean;
+  rejectedOptions?: number[];
 }) {
   const reduce = useReducedMotion();
   const railRef = useRef<HTMLDivElement>(null);
@@ -94,6 +96,7 @@ export default function DraftCarousel({
                 companyMode={companyMode}
                 authorName={authorName}
                 hasAvatar={hasAvatar}
+                initiallyRejected={rejectedOptions.includes(o.n)}
               />
             </div>
           ))}
