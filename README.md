@@ -10,6 +10,8 @@ one, and publish in ~2 minutes. Nothing posts automatically.
 It runs on **your own Claude subscription** (via [Claude Code](https://claude.com/claude-code)),
 entirely on your machine. No server, no accounts, nothing uploaded.
 
+![The shippost app — one of 5 ranked drafts with a live LinkedIn-style preview, A/B copy, score, and "Edit with AI".](docs/screenshot.png)
+
 ```
    your git commits ─┐
    your AI workflow  ├─► Claude (headless) ─► 5 ranked drafts ─► the app ─► you publish
