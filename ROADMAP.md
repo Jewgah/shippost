@@ -2,6 +2,16 @@
 
 A running log of notable changes, most recent first.
 
+## 93e996c — feat: "Not for me" reject signal that steers future generations (2026-06-01)
+
+**Problem:** There was no way to tell the engine an angle was unwanted, so a rejected idea could resurface every run. Picks taught it what to write; nothing taught it what to avoid.
+
+**Solution:** Added a "Not for me" button on each option that POSTs to a new `/api/reject` route, appending to a capped `.rejects.jsonl` (separate from picks, not added to the voice corpus). The harvest surfaces recent rejected topics and SKILL.md tells the engine never to offer them or close variants. Rejected state persists across reloads via `rejectedOptionsByDraftId` threaded through the draft page and carousel. Post/reject buttons are mutually exclusive and cross-guarded so an option can't end up in both logs.
+
+**Files changed:** app/components/OptionCard.tsx, app/components/DraftCarousel.tsx, app/app/draft/[date]/page.tsx, app/app/api/reject/route.ts, app/lib/voice.ts, app/lib/config.ts, engine/harvest.sh, engine/SKILL.md, app/test/rejects.test.ts
+
+---
+
 ## a21f227 — feat: posting cadence + streak on home, CI, picks-log hardening (2026-06-01)
 
 **Problem:** Nothing surfaced the every-2-days posting habit (whether you were due, any streak); the picks log grew unbounded; an unreadable draft could 500 the whole list; and there was no CI to protect the test suite now that the repo is public.
