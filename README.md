@@ -1,5 +1,7 @@
 # shippost
 
+[![CI](https://github.com/Jewgah/shippost/actions/workflows/ci.yml/badge.svg)](https://github.com/Jewgah/shippost/actions/workflows/ci.yml)
+
 **Turn your dev work into LinkedIn posts — drafted by Claude, in your voice, picked by you.**
 
 shippost watches the repos *you* choose, and every couple of days drafts **5 ranked,
