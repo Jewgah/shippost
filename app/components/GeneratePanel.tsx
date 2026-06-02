@@ -155,6 +155,11 @@ export default function GeneratePanel() {
   const mm = String(Math.floor(elapsedSec / 60)).padStart(2, "0");
   const ss = String(elapsedSec % 60).padStart(2, "0");
   const step = STEPS[Math.min(STEPS.length - 1, Math.floor(elapsedSec / 22))];
+  // Believable, monotonic progress with no real backend signal: ease toward a cap (~92%) over the
+  // expected couple of minutes, so the bar keeps creeping even on a long run but never claims it's
+  // done before the run actually returns (completion navigates to the new draft).
+  const progress = 92 * (1 - Math.exp(-elapsedSec / 75));
+  const pct = Math.round(progress);
 
   return (
     <div className="mb-8">
@@ -343,16 +348,24 @@ export default function GeneratePanel() {
               </div>
             </div>
             <span className="font-mono text-xs text-muted">
-              {mm}:{ss} · ~1–3 min
+              {pct}% · {mm}:{ss} · ~1–3 min
             </span>
           </div>
-          {/* indeterminate progress sweep */}
-          <div className="mb-4 h-1 overflow-hidden rounded-full bg-border/40">
-            {!reduce ? (
-              <div className="progress-sweep h-full w-1/4 rounded-full" />
-            ) : (
-              <div className="h-full w-1/3 rounded-full bg-accent/60" />
-            )}
+          {/* determinate progress bar (time-based estimate — see `progress` above) */}
+          <div
+            className="mb-4 h-1.5 overflow-hidden rounded-full bg-border/40"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pct}
+            aria-label="Draft generation progress"
+          >
+            <div
+              className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${
+                reduce ? "bg-accent" : "progress-fill"
+              }`}
+              style={{ width: `${progress}%` }}
+            />
           </div>
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
