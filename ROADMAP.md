@@ -2,6 +2,16 @@
 
 A running log of notable changes, most recent first.
 
+## a2d45e3 — feat: make suggested visuals scroll-stopping art, never the brand logo (2026-06-14)
+
+**Problem:** The visual-suggestion guidance told the engine to "mix the types" and lean on the brand logo plus a generic conceptual shot, which produced forgettable, stock-style image ideas. The logo is the boring default the author already has.
+
+**Solution:** Recast the 3 suggested visuals around a deliberate art-directed star slot (idea 1: an iconic character/archetype recast in the post's role, vivid art styles encouraged), kept idea 2 as the real screenshot/before-after, and made idea 3 a different lane (candid photo metaphor or a second, distinct art style). Hard-banned the brand logo as a suggestion in both the SKILL prompt and the harvest's logo hint, and required style variety across the 5 options so a batch never repeats one look.
+
+**Files changed:** engine/SKILL.md, engine/harvest.sh
+
+---
+
 ## verify — reject signal avoids a rejected angle, confirmed by a live run (2026-06-01)
 
 **Problem:** The reject signal's plumbing was unit-tested, but whether a real headless generation actually honors REJECTED ANGLES was unverified.
