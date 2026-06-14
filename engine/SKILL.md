@@ -58,9 +58,11 @@ For every option write:
 2. **Personal repost caption** — 1–2 first-person lines the author adds when resharing to their own feed (their POV / the "why").
 3. **Why it works** — one line (for the author, not published).
 4. **Suggested visuals — 3 ideas** (for the author): three *different* images that could accompany the post, **best first**. Posts with an image get more reach.
-   - **Mix the types**: a real **screenshot / before-after** of the actual feature, the **brand logo** (if a logo path is in the harvest), and a **conceptual/illustrative** shot.
-   - For any idea that can be **AI-generated**, append a ready-to-paste prompt as `AI prompt: "…"`. Write it for a **natural, authentic** result — real-photography language (candid, available/natural light, shot on 35mm, subtle grain, slightly imperfect framing), a specific subject + setting. **Avoid the obvious-AI tells** (no "3D render, hyperdetailed, octane, trending on artstation, ultra-glossy, perfect symmetry"). It should read like a real photo, not AI art.
-   - For ideas that are a real screenshot/recording, mark `(screenshot — no AI)`.
+   - **Idea 1 — the scroll-stopper (the star slot).** Think like an art director, not a stock library: turn the post's core concept into ONE bold, unexpected piece of art. The go-to move is an **iconic character/archetype recast in the post's role** — a splashy cartoon-mouse conductor for an orchestrator, a chess grandmaster moving robot pieces for a planner, a heist crew mid-job for parallel agents, a lighthouse keeper for monitoring. Push the style: paint-splash digital art, dramatic oil-painting energy, surreal scale, neon-noir — whatever fits the concept. Append the ready prompt as `AI prompt: "…"`; for THIS slot vivid art language is encouraged (dynamic paint splashes, expressive brushwork, dramatic lighting, bold color). It should look like striking art someone chose on purpose, not a corporate stock image.
+   - **Idea 2 — the real thing**: a screenshot / before-after / terminal recording of the actual feature, marked `(screenshot — no AI)`. Authenticity wins when the work itself is visual.
+   - **Idea 3 — a different lane from #1**: a candid photographic metaphor — real-photography language (candid, available/natural light, shot on 35mm, subtle grain, slightly imperfect framing), no AI-art tells in this one — OR a second creative direction in a *different art style* than idea 1.
+   - **Never suggest the brand logo as a visual.** The author already has it; it is the boring default these ideas exist to beat. Only mention it if the post literally announces the brand itself.
+   - **Vary across the batch**: the 5 options' star slots must not share one style (not five paint-splash pieces) — rotate styles, eras, and metaphor types.
 
 **Voice rules (strict):**
 - First-person builder energy. Punchy, real, celebrates shipping/learning. **Sounds human, NOT AI.**
@@ -109,9 +111,9 @@ Write to the exact path the wrapper passed (or `<draftsDir>/YYYY-MM-DD.md`). **T
 
 _Why it works:_ <one line>
 _Suggested visuals:_
-1. <best idea — e.g. a real before/after screenshot> (screenshot — no AI)
-2. <idea> — AI prompt: "<natural, photographic prompt — candid, natural light, 35mm, subtle grain>"
-3. <conceptual idea> — AI prompt: "<…>"
+1. <scroll-stopper concept art — e.g. a splashy cartoon-mouse conductor leading an orchestra of robot musicians> — AI prompt: "<vivid art prompt — dynamic paint splashes, expressive brushwork, dramatic lighting, bold color>"
+2. <the real thing — e.g. a before/after screenshot of the feature> (screenshot — no AI)
+3. <different lane — candid photo metaphor or a second, different art style> — AI prompt: "<…>"
 
 ---
 ## Option 2 — build-in-public — currency formatter   (8.6/10)

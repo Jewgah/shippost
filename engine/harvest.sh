@@ -63,7 +63,7 @@ echo "  Name: $CFG_BRAND_NAME"
 [ -n "$CFG_BRAND_VIBE" ]    && echo "  Vibe: $CFG_BRAND_VIBE"
 echo "  IMPORTANT: you may name the brand and frame posts around it, but write in"
 echo "  the author's real, human first-person voice — do NOT copy marketing adjectives."
-[ -n "$CFG_LOGO_PATH" ] && [ -f "$CFG_LOGO_PATH" ] && echo "  Logo to attach (manual): $CFG_LOGO_PATH"
+[ -n "$CFG_LOGO_PATH" ] && [ -f "$CFG_LOGO_PATH" ] && echo "  (A brand logo exists; the author attaches it manually when they want it — NEVER suggest the logo as one of the 3 suggested visuals.)"
 
 # ---------- SCRUB hints ----------
 echo
