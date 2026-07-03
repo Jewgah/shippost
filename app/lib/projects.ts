@@ -59,6 +59,20 @@ function clientSignals(): { clientReposRoot: string; clientNames: string[] } {
   }
 }
 
+/** The root the folder browser opens at and /api/suggestions treats as "your projects live here".
+ *  Configurable via app.projectsRoot (read raw + try/catch so a missing config.json — e.g. in
+ *  tests/CI — degrades to the default instead of throwing). */
+export function projectsRoot(): string {
+  try {
+    const raw = JSON.parse(fs.readFileSync(configPath(), "utf8"));
+    const p = (raw.app ?? {}).projectsRoot;
+    if (typeof p === "string" && p.trim()) return path.resolve(expandTilde(p.trim()));
+  } catch {
+    /* default below */
+  }
+  return path.join(os.homedir(), "Desktop", "Projects");
+}
+
 // Where the allowlist lives. SHIPPOST_ALLOWLIST overrides it (tests point this at a temp file so
 // they never touch the real engine/postable-projects.txt); otherwise it's repoRoot + the configured
 // relative path, the same resolution /api/suggestions uses.
@@ -92,15 +106,15 @@ function allowlistResolved(): Set<string> {
 }
 
 /**
- * List the sub-folders of `target` (defaulting to ~/Desktop/Projects, else home), clamped so the
- * browser can never climb above the home dir. Each entry says whether it's a git repo, already on
- * the allowlist, or sensitive client work (which the UI must not let you add).
+ * List the sub-folders of `target` (defaulting to the configured projects root, else home),
+ * clamped so the browser can never climb above the home dir. Each entry says whether it's a git
+ * repo, already on the allowlist, or sensitive client work (which the UI must not let you add).
  */
 export function listFolders(target?: string): FolderListing {
   const home = os.homedir();
   let dir = target ? path.resolve(expandTilde(target)) : "";
   if (!dir) {
-    const proj = path.join(home, "Desktop", "Projects");
+    const proj = projectsRoot();
     dir = fs.existsSync(proj) ? proj : home;
   }
   if (dir !== home && !dir.startsWith(home + "/")) dir = home; // never browse above home

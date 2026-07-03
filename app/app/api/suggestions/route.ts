@@ -6,6 +6,7 @@ import { loadConfig } from "@/lib/config";
 import { configPath, expandTilde } from "@/lib/paths";
 import { PILLAR_LABELS } from "@/lib/theme";
 import { shouldSurfaceRecent } from "@/lib/steering";
+import { projectsRoot } from "@/lib/projects";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -93,7 +94,7 @@ export async function GET() {
   }));
 
   // ---- recent Claude Code sessions (display/nudge only; hard-filtered for safety) ----
-  const projectsRoot = path.join(os.homedir(), "Desktop", "Projects");
+  const projRoot = projectsRoot();
   const sessionsDir = path.join(os.homedir(), ".claude", "projects");
 
   try {
@@ -108,7 +109,7 @@ export async function GET() {
       if (added >= MAX_RECENT) break;
       const cwd = sessionCwd(path.join(sessionsDir, d.name));
       if (!cwd) continue;
-      if (!shouldSurfaceRecent(cwd, { projectsRoot, clientReposRoot, clientNames })) continue; // never surface client work
+      if (!shouldSurfaceRecent(cwd, { projectsRoot: projRoot, clientReposRoot, clientNames })) continue; // never surface client work
       const rp = path.resolve(cwd);
       if (allowResolved.has(rp) || seen.has(rp)) continue; // already shown as allowlist / dup
       seen.add(rp);

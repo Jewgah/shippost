@@ -3,7 +3,7 @@
 # Usage: bash scripts/doctor.sh
 
 REPO_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_DIR"
+cd "$REPO_DIR" || exit 1
 pass=0; warn=0; fail=0
 ok()   { echo "  ✓ $1"; pass=$((pass+1)); }
 note() { echo "  ! $1"; warn=$((warn+1)); }

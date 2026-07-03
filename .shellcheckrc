@@ -1,0 +1,7 @@
+# Style-only suppressions — each is a deliberate pattern here, not an oversight:
+# SC2155 export-with-assign (jq failures are handled inside _get, nothing masked that matters)
+# SC1091  sourced file not followed (lib/config.sh is resolved at runtime from the script dir)
+# SC2088  "tilde in quotes" — those case patterns MATCH a literal ~, then expand it manually
+# SC2015  A && B || C in doctor.sh's one-line checks (B is a plain echo, can't fail meaningfully)
+# SC2012  ls -1t for mtime-sorted drafts (filenames are our own YYYY-MM-DD*.md, no exotic chars)
+disable=SC2155,SC1091,SC2088,SC2015,SC2012
