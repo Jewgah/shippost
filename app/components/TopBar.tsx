@@ -10,11 +10,16 @@ export default function TopBar({ brandName }: { brandName: string }) {
 
   async function quit() {
     if (!confirm("Stop the shippost server? The app will close and the browser tab can be closed.")) return;
-    setQuitting(true);
     try {
-      await fetch("/api/quit", { method: "POST" });
+      const res = await fetch("/api/quit", { method: "POST" });
+      if (res.status === 409) {
+        const j = await res.json().catch(() => ({}));
+        alert(j.error || "A generation is still running — wait for it to finish before quitting.");
+        return;
+      }
+      setQuitting(true);
     } catch {
-      /* server is going down — the fetch dropping is expected */
+      setQuitting(true); // server already went down mid-request — same outcome
     }
   }
 

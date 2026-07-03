@@ -90,7 +90,7 @@ fi
 if [ "${SHIPPOST_COMPANY_MODE:-0}" = "1" ]; then
   PROMPT="$PROMPT  Mode: COMPANY — each option keeps a company-page post (section A) AND a short first-person repost caption (section B), exactly as the SKILL specifies."
 else
-  PROMPT="$PROMPT  Mode: PERSONAL-ONLY — write each option as ONE first-person post for the author's OWN LinkedIn profile (not a company page). Put that single post under '**A. Company post**' and OMIT section B entirely (no repost caption). Everything else (header, _Why it works:_, _Suggested visuals:_) stays as specified."
+  PROMPT="$PROMPT  Mode: PERSONAL-ONLY — write each option as ONE first-person post for the author's OWN LinkedIn profile (not a company page). Put that single post under '**A. Company post**' and OMIT section B entirely (no repost caption). Everything else (header, '**C. First comment**' when the option has a link, _Why it works:_, _Suggested visuals:_) stays as specified."
 fi
 
 # shellcheck disable=SC2086 # CFG_ALLOWED_TOOLS is a deliberate space-separated arg list

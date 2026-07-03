@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseDraft, parseDraftMeta, removeOptionFromMarkdown } from "@/lib/draftParser";
+import { normalizeDraftMarkdown, parseDraft, parseDraftMeta, removeOptionFromMarkdown } from "@/lib/draftParser";
 
 const WELL_FORMED = `# LinkedIn drafts — 2026-05-31 · 5 options, ranked · pick ONE
 
@@ -130,6 +130,105 @@ _Suggested visuals:_
     expect(o.firstComment).toBe("");
     expect(o.repostCaption).toContain("My personal take on it.");
   });
+
+  it("tolerates a slipped C header ('**C — First comment**') so the link never lands in the caption", () => {
+    const md = WITH_C.replace("**C. First comment**", "**C — First comment**");
+    const o = parseDraft(md).options[0];
+    expect(o.firstComment).toBe("https://example.dev");
+    expect(o.repostCaption).toBe("Small thing, big comfort.");
+  });
+
+  it("personal-only mode (no B section): the post excludes C/why/visuals, C still extracted", () => {
+    const md = `# LinkedIn drafts — 2026-07-03
+
+## ⭐ Option 1 — build-in-public — quit button   (9.0/10)
+**A. Company post**
+Shipped a quit button today.
+
+**C. First comment**
+https://example.dev
+
+_Why it works:_ concrete.
+_Suggested visuals:_
+1. screenshot (screenshot — no AI)
+`;
+    const o = parseDraft(md).options[0];
+    expect(o.parsed).toBe(true);
+    expect(o.companyPost).toBe("Shipped a quit button today.");
+    expect(o.companyPost).not.toContain("example.dev");
+    expect(o.companyPost).not.toContain("Why it works");
+    expect(o.firstComment).toBe("https://example.dev");
+    expect(o.repostCaption).toBe("");
+  });
+
+  it("personal-only mode without C: the post stops at the why-line", () => {
+    const md = `# LinkedIn drafts — 2026-07-03
+
+## Option 1 — lesson — anchors   (8.0/10)
+**A. Company post**
+Just the post.
+
+_Why it works:_ x.
+_Suggested visuals:_
+1. screenshot (screenshot — no AI)
+`;
+    const o = parseDraft(md).options[0];
+    expect(o.companyPost).toBe("Just the post.");
+    expect(o.visual).toContain("screenshot");
+  });
+});
+
+describe("normalizeDraftMarkdown — freezes generic headers into explicit Option N", () => {
+  const MIXED = `# LinkedIn drafts — 2026-07-03
+
+## Option 1 — lesson — first   (9.0/10)
+**A. Company post**
+First body.
+
+**B. Repost caption (your profile)**
+Cap 1.
+
+_Why it works:_ a.
+
+---
+## ⭐ The post — build-in-public — generic slip   (7.0/10)
+**A. Company post**
+Generic body.
+
+**B. Repost caption (your profile)**
+Cap g.
+
+_Why it works:_ c.
+
+---
+pillars used: lesson, build-in-public
+`;
+
+  it("rewrites all headers to their displayed (position) numbers, keeping star/pillar/topic/score", () => {
+    const { md, changed } = normalizeDraftMarkdown(MIXED);
+    expect(changed).toBe(true);
+    expect(md).toContain("## Option 1 — lesson — first   (9/10)");
+    expect(md).toContain("## ⭐ Option 2 — build-in-public — generic slip   (7/10)");
+    expect(md).not.toContain("The post —");
+    // parses identically to the pre-normalization display
+    const d = parseDraft(md);
+    expect(d.options.map((o) => o.n)).toEqual([1, 2]);
+    expect(d.options[1].star).toBe(true);
+    expect(d.footer).toContain("pillars used:");
+  });
+
+  it("is idempotent and a no-op on explicit drafts", () => {
+    const once = normalizeDraftMarkdown(MIXED);
+    expect(normalizeDraftMarkdown(once.md).changed).toBe(false);
+    expect(normalizeDraftMarkdown(WELL_FORMED)).toEqual({ md: WELL_FORMED, changed: false });
+  });
+
+  it("after normalization, deleting an option no longer shifts the survivors' numbers", () => {
+    const { md } = normalizeDraftMarkdown(MIXED);
+    const { md: after } = removeOptionFromMarkdown(md, 1);
+    // the survivor keeps its frozen identity (Option 2), so a pick/reject logged as 2 still matches
+    expect(parseDraft(after).options.map((o) => o.n)).toEqual([2]);
+  });
 });
 
 describe("parseDraft — back-compat & robustness", () => {
@@ -171,11 +270,11 @@ some freeform text without the A/B structure
   // "## Option 1 — …", and a singular "pillar:"/"source (scrubbed):" footer. It used to render as a
   // raw "Option ?" dump. Now it's tolerated: numbered by position, content + footer parsed.
   it("tolerates a non-`Option N` header (numbers by position) and a singular footer", () => {
-    const md = `# LinkedIn draft — 2026-06-22 · the AETHERFALL post
+    const md = `# LinkedIn draft — 2026-06-22 · the MOONFORGE post
 
 > Post section A then repost using section B.
 
-## The post — build-in-public — I built a Dofus-like   (9.3/10)
+## The post — build-in-public — I built a roguelike   (9.3/10)
 **A. Company post**
 This week I shipped my own game.
 
@@ -188,7 +287,7 @@ _Suggested visuals:_
 
 ---
 pillar: build-in-public (personal / nostalgia)
-source (scrubbed): AETHERFALL, my own game
+source (scrubbed): MOONFORGE, my own game
 scrubbed: yes
 `;
     const d = parseDraft(md);
@@ -197,7 +296,7 @@ scrubbed: yes
     expect(o.n).toBe(1); // numbered by position, not shown as "?"
     expect(o.parsed).toBe(true);
     expect(o.pillar).toBe("build-in-public");
-    expect(o.topic).toBe("I built a Dofus-like");
+    expect(o.topic).toBe("I built a roguelike");
     expect(o.score).toBe(9.3);
     expect(o.companyPost).toContain("This week I shipped my own game.");
     expect(o.repostCaption).toContain("Built by the kid");

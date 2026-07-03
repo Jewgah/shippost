@@ -109,11 +109,20 @@ function assignNumbers(headers: DraftOptionMeta[]): number[] {
   return headers.map((h, i) => (h.parsedHeader ? (anyGeneric ? i + 1 : h.n) : 0));
 }
 
-// End of the B section: the new C ("First comment") section when present, else the why-line
-// (drafts generated before C existed). Without the C stop, the link block would be swept into
-// the repost caption the user copies.
-const B_END_RE = /\*\*C\.\s*First comment[^\n]*\*\*|^_Why it works:_/im;
-const C_START_RE = /\*\*C\.\s*First comment[^\n]*\*\*/i;
+// The C header, tolerant of slipped punctuation ("**C. First comment**", "**C — First comment**",
+// "**C: First comment**") — if a slip weren't matched, the link block would be swept into the
+// repost caption the user copies.
+const C_HEADER = `\\*\\*C\\b\\W{0,3}First comment[^\\n]*\\*\\*`;
+// End of the A section: the B header normally — but in personal-only mode the engine omits B
+// entirely, so also stop at C / the why-line / the visuals block. Without these fallbacks the
+// pasteable post would swallow everything to the end of the option.
+const A_END_RE = new RegExp(
+  `\\*\\*B\\.\\s*Repost caption[^\\n]*\\*\\*|${C_HEADER}|^_(Why it works|Suggested visuals?):_`,
+  "im"
+);
+// End of the B section: the C section when present, else the why-line (pre-C drafts).
+const B_END_RE = new RegExp(`${C_HEADER}|^_Why it works:_`, "im");
+const C_START_RE = new RegExp(C_HEADER, "i");
 
 function parseOptionBlock(headerLine: string, body: string[], n: number): DraftOption {
   const raw = [headerLine, ...body].join("\n").trim();
@@ -122,7 +131,7 @@ function parseOptionBlock(headerLine: string, body: string[], n: number): DraftO
   // Sub-section extraction. Humanize ONLY the published post text (A & B).
   const text = body.join("\n");
   const companyPost = humanizeText(
-    extractBetween(text, /\*\*A\.\s*Company post\*\*/i, /\*\*B\.\s*Repost caption[^\n]*\*\*/i)
+    extractBetween(text, /\*\*A\.\s*Company post\*\*/i, A_END_RE)
   );
   const repostCaption = humanizeText(
     extractBetween(text, /\*\*B\.\s*Repost caption[^\n]*\*\*/i, B_END_RE)
@@ -258,6 +267,38 @@ export function parseDraftMeta(md: string): DraftMeta {
     date,
     options: headers.map((h, i) => ({ ...h, n: numbers[i] })),
   };
+}
+
+/**
+ * Rewrite tolerated generic option headers as explicit `## Option N` headers, freezing the
+ * position-derived numbers the UI displays into the file itself. Called on read (readDraft)
+ * BEFORE any pick/reject/edit/delete records an option number, so the number is a stable
+ * identity from the first time the user can act on it: a later delete no longer shifts the
+ * survivors' numbers, and edit.sh's literal "Option N" header match targets the same block
+ * the UI labelled N. Idempotent — returns changed=false when no generic header exists.
+ */
+export function normalizeDraftMarkdown(md: string): { md: string; changed: boolean } {
+  const lines = md.split(/\r?\n/);
+  const starts: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (FOOTER_RE.test(lines[i])) break;
+    if (/^#{2,3}\s+/.test(lines[i])) starts.push(i);
+  }
+  const headers = starts.map((s) => parseHeader(lines[s]));
+  if (!headers.some((h) => h.parsedHeader && !h.n)) return { md, changed: false };
+
+  // Any generic header ⇒ assignNumbers is in position mode for the whole draft, so ALL
+  // headers are rewritten to their displayed number (explicit ones included — their raw
+  // label may differ from the position the UI shows).
+  const numbers = assignNumbers(headers);
+  starts.forEach((s, i) => {
+    const h = headers[i];
+    if (!h.parsedHeader) return;
+    const hashes = /^#{2,3}/.exec(lines[s])![0];
+    const score = h.score != null ? `   (${h.score}/10)` : "";
+    lines[s] = `${hashes} ${h.star ? "⭐ " : ""}Option ${numbers[i]} — ${h.pillar} — ${h.topic}${score}`;
+  });
+  return { md: lines.join("\n"), changed: true };
 }
 
 /**

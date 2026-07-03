@@ -46,6 +46,14 @@ describe("parseShares — CSV", () => {
     expect(r.posts).toEqual(["september post", "october post"]);
   });
 
+  it("mixed parseable/unparseable dates fall back to one consistent lexical order", () => {
+    // one garbage date would make a per-pair timestamp/lexical mix non-transitive —
+    // the whole set must degrade to the deterministic lexical order instead
+    const csv = `Date,ShareCommentary\n10/01/2025,"b"\nnot-a-date,"c"\n9/01/2025,"a"\n`;
+    const r = parseShares(Buffer.from(csv), "Shares.csv");
+    expect(r.posts).toEqual(["b", "a", "c"]); // lexical: 10/01 < 9/01 < not-a-date
+  });
+
   it("throws a clear error when no commentary column exists", () => {
     const csv = `Date,ShareLink\n2025-01-01,http://x\n`;
     expect(() => parseShares(Buffer.from(csv), "Shares.csv")).toThrow(/column/i);

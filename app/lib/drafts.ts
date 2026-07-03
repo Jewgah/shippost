@@ -2,7 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config";
-import { parseDraft, parseDraftMeta, removeOptionFromMarkdown, type Draft } from "./draftParser";
+import { normalizeDraftMarkdown, parseDraft, parseDraftMeta, removeOptionFromMarkdown, type Draft } from "./draftParser";
 import { isDraftId } from "./draftId";
 import { recentPostCount, pickedOptionsByDraftId } from "./voice";
 import { effectiveLogoPath, readSettings, uploadedAvatarPath } from "./settings";
@@ -66,7 +66,21 @@ export function readDraft(date: string): Draft | null {
   if (!isDraftId(date)) return null; // guard against path traversal
   const file = path.join(resolved.draftsDir, `${date}.md`);
   if (!fs.existsSync(file)) return null;
-  return parseDraft(fs.readFileSync(file, "utf8"));
+  // Freeze slipped generic headers into explicit `Option N` BEFORE the user can pick/reject/
+  // edit/delete — the option number is the join identity for all of those, and position-derived
+  // numbers would shift after a delete. The draft page (this read) is the only place those
+  // buttons exist, so normalizing here guarantees stable numbers everywhere downstream.
+  const { md, changed } = normalizeDraftMarkdown(fs.readFileSync(file, "utf8"));
+  if (changed) {
+    try {
+      fs.writeFileSync(file, md, "utf8");
+    } catch (e) {
+      // Persisting the freeze failed (read-only dir?) — still render from the normalized
+      // text so this view is correct; the rewrite will be retried on the next read.
+      console.error(`readDraft: could not persist normalized headers for ${date}:`, e);
+    }
+  }
+  return parseDraft(md);
 }
 
 /**

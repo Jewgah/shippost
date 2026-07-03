@@ -58,7 +58,7 @@ For every option write:
 2. **Personal repost caption** — 1–2 first-person lines the author adds when resharing to their own feed (their POV / the "why").
 3. **First comment** — the link to drop in the post's **first comment**, never the body (LinkedIn suppresses reach on posts with outbound links; a comment link doesn't). Pick by this ladder:
    - The harvest's BRAND section lists a **Site URL** and the post shows real build/work → use that exact URL (frame it "more of what I build"). **Never invent or extend a URL** (no guessed slugs/paths) — a 404 is worse than no link.
-   - No Site URL configured, or a pure opinion/process post with nothing concrete to show → **no link**; a soft one-line CTA instead ("happy to go deeper, DM me"). Don't bolt a link onto an unrelated post — it reads as spam and converts nothing.
+   - No Site URL configured, or a pure opinion/process post with nothing concrete to show → **omit section C entirely** (no header, no placeholder text) and end the post body with a soft one-line CTA instead ("happy to go deeper, DM me"). Don't bolt a link onto an unrelated post — it reads as spam and converts nothing.
    These links are `nofollow` (referral clicks, not SEO juice) — the point is sending warm viewers to the work. When there IS a link, end sections A/B with a plain `link in comments` line.
 4. **Why it works** — one line (for the author, not published).
 5. **Suggested visuals — 3 ideas** (for the author): three *different* images that could accompany the post, **best first**. Posts with an image get more reach.
@@ -115,7 +115,7 @@ Write to the exact path the wrapper passed (or `<draftsDir>/YYYY-MM-DD.md`). **T
 <short first-person caption>
 
 **C. First comment**
-<link to paste as the first comment — the BRAND section's Site URL — or `(no link — soft CTA: "happy to go deeper, DM me")`>
+<the BRAND section's Site URL, to paste as the first comment — include this section ONLY when there is a real link; otherwise omit it entirely>
 
 _Why it works:_ <one line>
 _Suggested visuals:_

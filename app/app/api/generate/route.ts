@@ -7,7 +7,7 @@ import { blockCrossSite } from "@/lib/guard";
 import { PILLAR_LABELS } from "@/lib/theme";
 import { cleanField } from "@/lib/steering";
 import { readSettings } from "@/lib/settings";
-import { acquireRunLock, STALE_MS } from "@/lib/runLock";
+import { acquireRunLock, releaseRunLock, STALE_MS } from "@/lib/runLock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,7 +71,8 @@ export async function POST(req: Request) {
   const { draftsDir, repoRoot, lock, result } = paths();
   fs.mkdirSync(draftsDir, { recursive: true });
 
-  if (!acquireRunLock(lock)) return NextResponse.json({ started: false, running: true });
+  const token = acquireRunLock(lock);
+  if (!token) return NextResponse.json({ started: false, running: true });
 
   const date = nowStamp();
 
@@ -95,11 +96,7 @@ export async function POST(req: Request) {
     } catch {
       /* ignore */
     }
-    try {
-      fs.unlinkSync(lock);
-    } catch {
-      /* ignore */
-    }
+    releaseRunLock(lock, token); // compare-and-delete: never unlinks a newer run's lock
   };
 
   child.on("error", (err) => finish(false, { error: String(err) }));

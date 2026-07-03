@@ -2,6 +2,16 @@
 
 A running log of notable changes, most recent first.
 
+## fix: deep-review follow-up — stable option identity, quit guard, owner-token lock (2026-07-03)
+
+**Problem:** A multi-agent deep review of the day's batch confirmed five issues: (1) position-derived numbers for tolerated generic headers were unstable identity — deleting an option shifted the survivors' numbers so logged picks/rejects highlighted the wrong cards, and "Edit with AI" (which matches the literal `Option N` header text) could rewrite a different block than the one clicked; (2) quitting mid-generation orphaned the `claude -p` child and leaked the run lock; (3) the run lock swallowed real errors (EACCES/ENOSPC) as "already running" forever, and a stale-but-alive run could unlink a newer run's lock; (4) with no `siteUrl`, the model wrote a "(no link — soft CTA)" placeholder that rendered as a copyable "paste as first comment" card; (5) in personal-only mode (no B section) the pasteable post swallowed everything after A, now including the C link.
+
+**Solution:** (1) `normalizeDraftMarkdown` freezes generic headers into explicit `## Option N` on first read — before any pick/reject/edit/delete can record a number — so identity never drifts and edit/delete agree (verified live: opening the page rewrites the file); (2) `/api/quit` returns 409 while a run is live, with a friendly alert; (3) the lock now stores an owner token, release is compare-and-delete, and non-EEXIST failures throw instead of masquerading as "running"; (4) SKILL.md omits section C entirely when there's no link, with a render-guard belt for old drafts; (5) the A-section end anchor falls back to C/why/visuals when B is absent, and the C header regex tolerates slipped punctuation. Also: chronological-vs-lexical import sort is now all-or-nothing (a mixed file can't produce a non-transitive order), the folder browser honors an out-of-home `app.projectsRoot` like suggestions do, and the one real project name in a test fixture was replaced with a fictional one. 11 new tests (94 total), including the run lock's first unit tests.
+
+**Files changed:** app/lib/draftParser.ts, app/lib/drafts.ts, app/lib/runLock.ts, app/app/api/generate/route.ts, app/app/api/edit/route.ts, app/app/api/quit/route.ts, app/components/TopBar.tsx, app/components/OptionCard.tsx, app/lib/sharesCsv.ts, app/lib/projects.ts, engine/SKILL.md, engine/generate.sh, app/test/draftParser.test.ts, app/test/sharesCsv.test.ts, app/test/runLock.test.ts
+
+---
+
 ## feat: first-comment link section (C) — end-to-end (2026-07-03)
 
 **Problem:** Links in a LinkedIn post body suppress reach; the fix is a link in the first comment — but drafts had nowhere to put one, and a half-started spec (SKILL.md only) would have corrupted the repost caption in the app because the parser didn't know section C existed. It also hardcoded the author's personal URL into the public template.

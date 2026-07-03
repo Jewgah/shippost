@@ -112,12 +112,15 @@ function allowlistResolved(): Set<string> {
  */
 export function listFolders(target?: string): FolderListing {
   const home = os.homedir();
+  const root = projectsRoot();
+  const under = (d: string, base: string) => d === base || d.startsWith(base + "/");
   let dir = target ? path.resolve(expandTilde(target)) : "";
   if (!dir) {
-    const proj = projectsRoot();
-    dir = fs.existsSync(proj) ? proj : home;
+    dir = fs.existsSync(root) ? root : home;
   }
-  if (dir !== home && !dir.startsWith(home + "/")) dir = home; // never browse above home
+  // Never browse outside home — except under an explicitly configured projects root
+  // (which may live outside home, e.g. an external volume; suggestions honor it too).
+  if (!under(dir, home) && !under(dir, root)) dir = home;
 
   const allow = allowlistResolved();
   const { clientReposRoot, clientNames } = clientSignals();
@@ -140,7 +143,9 @@ export function listFolders(target?: string): FolderListing {
   }
   entries.sort((a, b) => a.name.localeCompare(b.name));
 
-  return { path: dir, parent: dir === home ? null : path.dirname(dir), home, entries };
+  // Ceiling: home, or the configured root itself when it lives outside home.
+  const atCeiling = dir === home || (dir === root && !under(root, home));
+  return { path: dir, parent: atCeiling ? null : path.dirname(dir), home, entries };
 }
 
 /**

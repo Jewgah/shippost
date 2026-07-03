@@ -6,7 +6,7 @@ import { loadConfig } from "@/lib/config";
 import { blockCrossSite } from "@/lib/guard";
 import { cleanField } from "@/lib/steering";
 import { isDraftId } from "@/lib/draftId";
-import { acquireRunLock } from "@/lib/runLock";
+import { acquireRunLock, releaseRunLock } from "@/lib/runLock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +39,8 @@ export async function POST(req: Request) {
 
   const lock = path.join(resolved.draftsDir, ".generating");
   const result = path.join(resolved.draftsDir, ".last_generate.json");
-  if (!acquireRunLock(lock)) return NextResponse.json({ started: false, running: true });
+  const token = acquireRunLock(lock);
+  if (!token) return NextResponse.json({ started: false, running: true });
 
   const script = path.join(resolved.repoRoot, "engine", "edit.sh");
   const child = spawn("bash", [script], {
@@ -59,11 +60,7 @@ export async function POST(req: Request) {
     } catch {
       /* ignore */
     }
-    try {
-      fs.unlinkSync(lock);
-    } catch {
-      /* ignore */
-    }
+    releaseRunLock(lock, token); // compare-and-delete: never unlinks a newer run's lock
   };
   child.on("error", (err) => finish(false, { error: String(err) }));
   child.on("close", (code) => finish(code === 0, { code }));

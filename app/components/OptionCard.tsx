@@ -358,7 +358,9 @@ export default function OptionCard({
           {companyMode && option.repostCaption && (
             <ABSection label="B" hint="repost caption — your profile" text={option.repostCaption} limit={3000} />
           )}
-          {option.firstComment && (
+          {/* Belt for older drafts / model slips: a "(no link — …)" placeholder is a note
+              to the author, not something to paste as a comment. */}
+          {option.firstComment && !/^\(?\s*no link/i.test(option.firstComment) && (
             <ABSection
               label="C"
               hint="first comment — paste under the post right after publishing"
