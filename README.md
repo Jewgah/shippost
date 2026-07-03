@@ -61,7 +61,7 @@ company-page post plus a repost caption, A and B).
 ## Install
 
 ```bash
-git clone git@github.com:Jewgah/shippost.git
+git clone https://github.com/Jewgah/shippost.git
 cd shippost
 
 # 1) install the engine as a Claude Code skill (/shippost)
@@ -106,7 +106,9 @@ First launch walks you through importing your LinkedIn posts — see
 2. Read the 5 cards; ⭐ is the recommended pick. Choose one.
 3. **Copy A** → paste on your company page → attach the suggested visual → Post.
 4. On that post: **Repost → Repost with your thoughts**, paste **B** → Post to your profile.
-5. Hit **"✓ I posted this"** so shippost learns from what you actually shipped.
+5. If the option has a **C** section, paste it as the post's **first comment** (links in
+   comments don't hurt reach; links in the body do).
+6. Hit **"✓ I posted this"** so shippost learns from what you actually shipped.
 
 ## Configuration
 
@@ -116,11 +118,13 @@ All settings live in `config.json` (copied from `config.example.json`). Highligh
 |-----|---------|
 | `author.name`, `author.bio` | Who you are — grounds every post. |
 | `brand.{name,tagline,offers,vibe,logoPath}` | The company page you post to (your own brand). |
+| `brand.siteUrl` | Your site/portfolio URL — offered as each option's first-comment link (empty = no links, soft CTAs instead). |
 | `dayJob.name`, `scrub.clientNames` | Names to **redact** — never posted about. |
 | `harvest.windowDays`, `recentPostsMax` | How far back to look; how many of your posts to feed the voice model. |
 | `output.draftsDir` | Where the dated draft files (one per run, and the app's data) live. |
 | `engine.{claudeBin,model,minGapHours,language}` | Claude binary/model, the every-2-days guard, output language. |
 | `app.theme` | `neutral` (default), `midnight`, or `neon`. |
+| `app.projectsRoot` | Where the in-app folder browser opens and "recent projects" are suggested from (default `~/Desktop/Projects`). |
 
 `engine/postable-projects.txt` lists the **only** repos shippost may mine. Never add a
 client/employer repo.

@@ -6,7 +6,7 @@ argument-hint: "[pillar hint, e.g. smart-ai-workflow — optional; otherwise spr
 
 # shippost — LinkedIn post engine (5 ranked options)
 
-Produce **5 distinct, ranked options** for the author's **company page** (their own brand) — they pick one and publish in ~2 minutes. Each option is self-contained: a ready company post **+** a personal-repost caption **+** a one-line "why it works" **+** a suggested visual. Output language is whatever the wrapper passes (default English). Saved as a dated markdown file in the configured drafts dir. Nothing is published — the author reviews and posts manually.
+Produce **5 distinct, ranked options** for the author's **company page** (their own brand) — they pick one and publish in ~2 minutes. Each option is self-contained: a ready company post **+** a personal-repost caption **+** a first-comment link **+** a one-line "why it works" **+** a suggested visual. Output language is whatever the wrapper passes (default English). Saved as a dated markdown file in the configured drafts dir. Nothing is published — the author reviews and posts manually.
 
 This is a **multi-pass single-agent** process — all reasoning, no subagents/new tools.
 
@@ -56,8 +56,12 @@ Remove or generalize:
 For every option write:
 1. **Company post** — ready to paste on the brand page.
 2. **Personal repost caption** — 1–2 first-person lines the author adds when resharing to their own feed (their POV / the "why").
-3. **Why it works** — one line (for the author, not published).
-4. **Suggested visuals — 3 ideas** (for the author): three *different* images that could accompany the post, **best first**. Posts with an image get more reach.
+3. **First comment** — the link to drop in the post's **first comment**, never the body (LinkedIn suppresses reach on posts with outbound links; a comment link doesn't). Pick by this ladder:
+   - The harvest's BRAND section lists a **Site URL** and the post shows real build/work → use that exact URL (frame it "more of what I build"). **Never invent or extend a URL** (no guessed slugs/paths) — a 404 is worse than no link.
+   - No Site URL configured, or a pure opinion/process post with nothing concrete to show → **no link**; a soft one-line CTA instead ("happy to go deeper, DM me"). Don't bolt a link onto an unrelated post — it reads as spam and converts nothing.
+   These links are `nofollow` (referral clicks, not SEO juice) — the point is sending warm viewers to the work. When there IS a link, end sections A/B with a plain `link in comments` line.
+4. **Why it works** — one line (for the author, not published).
+5. **Suggested visuals — 3 ideas** (for the author): three *different* images that could accompany the post, **best first**. Posts with an image get more reach.
    - **Idea 1 — the scroll-stopper (the star slot).** Think like an art director, not a stock library: turn the post's core concept into ONE bold, unexpected piece of art. The go-to move is an **iconic character/archetype recast in the post's role** — a splashy cartoon-mouse conductor for an orchestrator, a chess grandmaster moving robot pieces for a planner, a heist crew mid-job for parallel agents, a lighthouse keeper for monitoring. Push the style: paint-splash digital art, dramatic oil-painting energy, surreal scale, neon-noir — whatever fits the concept. Append the ready prompt as `AI prompt: "…"`; for THIS slot vivid art language is encouraged (dynamic paint splashes, expressive brushwork, dramatic lighting, bold color). It should look like striking art someone chose on purpose, not a corporate stock image.
    - **Idea 2 — the real thing**: a screenshot / before-after / terminal recording of the actual feature, marked `(screenshot — no AI)`. Authenticity wins when the work itself is visual.
    - **Idea 3 — a different lane from #1**: a candid photographic metaphor — real-photography language (candid, available/natural light, shot on 35mm, subtle grain, slightly imperfect framing), no AI-art tells in this one — OR a second creative direction in a *different art style* than idea 1.
@@ -100,7 +104,8 @@ Write to the exact path the wrapper passed (or `<draftsDir>/YYYY-MM-DD.md`). **T
 # LinkedIn drafts — 2026-05-31 · 5 options, ranked · pick ONE
 
 > Post section A to your company page, then Repost-with-thoughts to your
-> profile using section B. ⭐ = my top pick this run.
+> profile using section B, then drop section C as the first comment.
+> ⭐ = my top pick this run.
 
 ## ⭐ Option 1 — smart-ai-workflow — multi-agent review   (9.2/10)
 **A. Company post**
@@ -108,6 +113,9 @@ Write to the exact path the wrapper passed (or `<draftsDir>/YYYY-MM-DD.md`). **T
 
 **B. Repost caption (your profile)**
 <short first-person caption>
+
+**C. First comment**
+<link to paste as the first comment — the BRAND section's Site URL — or `(no link — soft CTA: "happy to go deeper, DM me")`>
 
 _Why it works:_ <one line>
 _Suggested visuals:_
@@ -120,6 +128,8 @@ _Suggested visuals:_
 **A. Company post**
 ...
 **B. Repost caption (your profile)**
+...
+**C. First comment**
 ...
 _Why it works:_ ...
 _Suggested visuals:_
@@ -138,7 +148,7 @@ scrubbed: yes (no clients, no secrets)
 
 ## Step 8 — Finish
 
-- **Interactive run (`/shippost`):** tell the author where it saved, that ⭐ is the top pick, and the 2-step publish (post A to the company page → Repost-with-thoughts B to personal). Offer tweaks ("more technical", "shorter", "funnier", "regenerate option 3").
+- **Interactive run (`/shippost`):** tell the author where it saved, that ⭐ is the top pick, and the 3-step publish (post A to the company page → Repost-with-thoughts B to personal → drop C as the first comment). Offer tweaks ("more technical", "shorter", "funnier", "regenerate option 3").
 - **Headless run (scheduler):** just write the file and exit. No questions.
 
 ## No-material fallback

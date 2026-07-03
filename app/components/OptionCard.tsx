@@ -358,6 +358,13 @@ export default function OptionCard({
           {companyMode && option.repostCaption && (
             <ABSection label="B" hint="repost caption — your profile" text={option.repostCaption} limit={3000} />
           )}
+          {option.firstComment && (
+            <ABSection
+              label="C"
+              hint="first comment — paste under the post right after publishing"
+              text={option.firstComment}
+            />
+          )}
 
           {option.why && <p className="text-xs text-muted"><span className="text-fg/70">Why it works:</span> {option.why}</p>}
           {option.visual && (

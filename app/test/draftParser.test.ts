@@ -98,6 +98,40 @@ describe("parseDraft — well-formed", () => {
   });
 });
 
+describe("parseDraft — C. First comment section", () => {
+  const WITH_C = `# LinkedIn drafts — 2026-07-03
+
+## ⭐ Option 1 — build-in-public — quit button   (9.0/10)
+**A. Company post**
+Shipped a quit button.
+
+**B. Repost caption (your profile)**
+Small thing, big comfort.
+
+**C. First comment**
+https://example.dev
+
+_Why it works:_ concrete and relatable.
+_Suggested visuals:_
+1. screenshot (screenshot — no AI)
+`;
+
+  it("extracts the first comment and keeps it OUT of the repost caption", () => {
+    const o = parseDraft(WITH_C).options[0];
+    expect(o.parsed).toBe(true);
+    expect(o.firstComment).toBe("https://example.dev");
+    expect(o.repostCaption).toBe("Small thing, big comfort.");
+    expect(o.repostCaption).not.toContain("example.dev");
+    expect(o.why).toBe("concrete and relatable.");
+  });
+
+  it("drafts without a C section still parse (firstComment empty)", () => {
+    const o = parseDraft(WELL_FORMED).options[0];
+    expect(o.firstComment).toBe("");
+    expect(o.repostCaption).toContain("My personal take on it.");
+  });
+});
+
 describe("parseDraft — back-compat & robustness", () => {
   it("parses the OLD single-line `_Suggested visual:_` form", () => {
     const md = `# LinkedIn drafts — 2026-05-29
@@ -131,6 +165,96 @@ some freeform text without the A/B structure
   it("does not crash on empty input", () => {
     expect(() => parseDraft("")).not.toThrow();
     expect(parseDraft("").options).toHaveLength(0);
+  });
+
+  // Regression: a generation slipped the format — header labelled "## The post — …" instead of
+  // "## Option 1 — …", and a singular "pillar:"/"source (scrubbed):" footer. It used to render as a
+  // raw "Option ?" dump. Now it's tolerated: numbered by position, content + footer parsed.
+  it("tolerates a non-`Option N` header (numbers by position) and a singular footer", () => {
+    const md = `# LinkedIn draft — 2026-06-22 · the AETHERFALL post
+
+> Post section A then repost using section B.
+
+## The post — build-in-public — I built a Dofus-like   (9.3/10)
+**A. Company post**
+This week I shipped my own game.
+
+**B. Repost caption (your profile)**
+Built by the kid who used to play these.
+
+_Why it works:_ a real full-circle story.
+_Suggested visuals:_
+1. a nostalgic diptych (AI prompt: "…")
+
+---
+pillar: build-in-public (personal / nostalgia)
+source (scrubbed): AETHERFALL, my own game
+scrubbed: yes
+`;
+    const d = parseDraft(md);
+    expect(d.options).toHaveLength(1);
+    const o = d.options[0];
+    expect(o.n).toBe(1); // numbered by position, not shown as "?"
+    expect(o.parsed).toBe(true);
+    expect(o.pillar).toBe("build-in-public");
+    expect(o.topic).toBe("I built a Dofus-like");
+    expect(o.score).toBe(9.3);
+    expect(o.companyPost).toContain("This week I shipped my own game.");
+    expect(o.repostCaption).toContain("Built by the kid");
+    expect(o.why).toBe("a real full-circle story.");
+    // the singular footer is split off, not swept into the option body
+    expect(d.footer).toContain("pillar:");
+    expect(o.raw).not.toContain("source (scrubbed)");
+    // delete still targets it by its displayed number
+    expect(removeOptionFromMarkdown(md, 1).removed).toBe(true);
+  });
+
+  // Regression: with per-block position numbering, a generic header at position 3 could collide
+  // with an explicit "## Option 3" elsewhere (two blocks both labelled 3) and delete could hit the
+  // wrong one. When ANY generic header exists, ALL blocks are numbered by position — unique, and
+  // parseDraft/parseDraftMeta/removeOptionFromMarkdown agree.
+  it("mixed explicit + generic headers: numbers all by position, delete hits the right block", () => {
+    const md = `# LinkedIn drafts — 2026-07-03
+
+## Option 1 — lesson — first   (9.0/10)
+**A. Company post**
+First body.
+
+**B. Repost caption (your profile)**
+Cap 1.
+
+_Why it works:_ a.
+
+---
+## Option 3 — lesson — labelled three   (8.0/10)
+**A. Company post**
+Labelled-three body.
+
+**B. Repost caption (your profile)**
+Cap 3.
+
+_Why it works:_ b.
+
+---
+## The post — build-in-public — generic slip   (7.0/10)
+**A. Company post**
+Generic body.
+
+**B. Repost caption (your profile)**
+Cap g.
+
+_Why it works:_ c.
+`;
+    const d = parseDraft(md);
+    expect(d.options.map((o) => o.n)).toEqual([1, 2, 3]); // unique — no double "3"
+    const meta = parseDraftMeta(md);
+    expect(meta.options.map((o) => o.n)).toEqual([1, 2, 3]);
+    // deleting "Option 3" (the third card in the UI) removes the generic block, not the
+    // block whose raw header happens to say "Option 3" (shown as card 2)
+    const { md: after, removed } = removeOptionFromMarkdown(md, 3);
+    expect(removed).toBe(true);
+    expect(after).not.toContain("Generic body.");
+    expect(after).toContain("Labelled-three body.");
   });
 });
 

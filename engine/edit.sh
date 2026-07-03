@@ -27,12 +27,13 @@ PROMPT="Revise ONE option in an existing draft. The file is at this exact path: 
 Rewrite ONLY 'Option $opt' according to this instruction from the author: \"$instr\"
 Rules:
 - Leave every OTHER option byte-for-byte unchanged; do not touch the title or footer.
-- Keep Option $opt's structure exactly: the header line '## [⭐ ]Option $opt — {pillar} — {2-4 word topic}   ({score}/10)', then '**A. Company post**', '**B. Repost caption (your profile)**', '_Why it works:_', and '_Suggested visuals:_'.
+- Keep Option $opt's structure exactly: the header line '## [⭐ ]Option $opt — {pillar} — {2-4 word topic}   ({score}/10)', then '**A. Company post**', '**B. Repost caption (your profile)**', '**C. First comment**' (only if the option already has one — keep it verbatim unless the instruction targets it), '_Why it works:_', and '_Suggested visuals:_'.
 - Keep section A under 3000 characters; keep section B short and first-person.
 - Language: $CFG_LANGUAGE.
 - Scrub rules still apply: never name clients ($CFG_SCRUB_LIST), never the day job, no secrets/tokens/internal URLs.
 Make the edit and save the file in place. Do not ask any questions — make the best editorial choice."
 
+# shellcheck disable=SC2086 # CFG_ALLOWED_TOOLS is a deliberate space-separated arg list
 "$CFG_CLAUDE_BIN" -p "$PROMPT" \
   --allowed-tools $CFG_ALLOWED_TOOLS \
   --model "$CFG_MODEL" \

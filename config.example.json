@@ -12,7 +12,8 @@
     "tagline": "Your one-line positioning",
     "offers": "what you build — e.g. web apps, mobile apps, AI systems",
     "vibe": "the feel — e.g. precise, playful, no-nonsense",
-    "logoPath": ""
+    "logoPath": "",
+    "siteUrl": ""
   },
 
   "dayJob": {
@@ -57,6 +58,7 @@
 
   "app": {
     "port": 3030,
-    "theme": "neutral"
+    "theme": "neutral",
+    "projectsRoot": ""
   }
 }

@@ -10,6 +10,7 @@ export interface DraftOption {
   score: number | null;
   companyPost: string;
   repostCaption: string;
+  firstComment: string;
   why: string;
   visual: string;
   raw: string;
@@ -53,8 +54,18 @@ const HEADER_RE = new RegExp(
 const HEADER_RE_NOSCORE = new RegExp(
   `^#{2,3}\\s+(⭐\\s*)?Option\\s+(\\d+)${SEP}(.+?)${SEP}(.+?)\\s*$`
 );
+// Tolerant fallback: the engine is told to write "## Option N — pillar — topic   (score/10)",
+// but a model-driven generation can slip and label the header differently (e.g. "## The post — …").
+// As long as the line keeps the "— pillar — topic   (score/10)" shape, treat it as an option; its
+// number is then assigned by position (see assignNumbers). Requires a score so a stray
+// "## a — b — c" heading can't be mistaken for an option.
+const HEADER_RE_GENERIC = new RegExp(
+  `^#{2,3}\\s+(⭐\\s*)?(?:.+?)${SEP}(.+?)${SEP}(.+?)\\s{2,}\\(\\s*([\\d.]+)\\s*\\/\\s*10\\s*\\)\\s*$`
+);
 
-const FOOTER_RE = /^(pillars used|sources(\s*\(scrubbed\))?|scrubbed)\s*:/i;
+// Footer keys. Tolerate the singular forms a slipped generation may emit (pillar/source) alongside
+// the canonical plural ones, so the footer is never swept into the last option's body.
+const FOOTER_RE = /^(pillars?(\s+used)?|sources?(\s*\(scrubbed\))?|scrubbed)\s*:/i;
 
 /**
  * Strip "AI tells" from POST BODY text (sections A & B) so a pasted post reads human:
@@ -81,10 +92,30 @@ function parseHeader(headerLine: string): DraftOptionMeta {
   if ((m = HEADER_RE_NOSCORE.exec(headerLine))) {
     return { star: Boolean(m[1]), n: parseInt(m[2], 10), pillar: m[3].trim(), topic: m[4].trim(), score: null, parsedHeader: true };
   }
+  if ((m = HEADER_RE_GENERIC.exec(headerLine))) {
+    // No explicit "Option N" — n=0 here; the caller numbers it by position.
+    return { star: Boolean(m[1]), n: 0, pillar: m[2].trim(), topic: m[3].trim(), score: parseFloat(m[4]), parsedHeader: true };
+  }
   return { n: 0, star: false, pillar: "", topic: "", score: null, parsedHeader: false };
 }
 
-function parseOptionBlock(headerLine: string, body: string[]): DraftOption {
+// A parsed header normally keeps its own "Option N" number. If ANY block has a tolerated generic
+// header (n=0), ALL blocks are numbered by 1-based position instead — mixing "Option 3" with a
+// position-derived number could collide (two blocks both labelled 3) and make delete hit the wrong
+// block. parseDraft, parseDraftMeta and removeOptionFromMarkdown all number through here on the
+// same block order, so they always agree on an option's displayed number.
+function assignNumbers(headers: DraftOptionMeta[]): number[] {
+  const anyGeneric = headers.some((h) => h.parsedHeader && !h.n);
+  return headers.map((h, i) => (h.parsedHeader ? (anyGeneric ? i + 1 : h.n) : 0));
+}
+
+// End of the B section: the new C ("First comment") section when present, else the why-line
+// (drafts generated before C existed). Without the C stop, the link block would be swept into
+// the repost caption the user copies.
+const B_END_RE = /\*\*C\.\s*First comment[^\n]*\*\*|^_Why it works:_/im;
+const C_START_RE = /\*\*C\.\s*First comment[^\n]*\*\*/i;
+
+function parseOptionBlock(headerLine: string, body: string[], n: number): DraftOption {
   const raw = [headerLine, ...body].join("\n").trim();
   const h = parseHeader(headerLine);
 
@@ -94,14 +125,18 @@ function parseOptionBlock(headerLine: string, body: string[]): DraftOption {
     extractBetween(text, /\*\*A\.\s*Company post\*\*/i, /\*\*B\.\s*Repost caption[^\n]*\*\*/i)
   );
   const repostCaption = humanizeText(
-    extractBetween(text, /\*\*B\.\s*Repost caption[^\n]*\*\*/i, /^_Why it works:_/im)
+    extractBetween(text, /\*\*B\.\s*Repost caption[^\n]*\*\*/i, B_END_RE)
   );
+  // Not humanized: it's a URL (or a soft-CTA note), never published prose. Ends at the
+  // why-line, or at the visuals block if a slipped generation omitted the why-line — the
+  // visuals must never be swallowed into what the user pastes as a comment.
+  const firstComment = extractBetween(text, C_START_RE, /^_(Why it works|Suggested visuals?):_/im);
   const why = extractLine(text, /^_Why it works:_\s*(.*)$/im);
   const visual = extractVisuals(text);
 
   const parsed = h.parsedHeader && companyPost.length > 0;
 
-  return { n: h.n, star: h.star, pillar: h.pillar, topic: h.topic, score: h.score, companyPost, repostCaption, why, visual, raw, parsed };
+  return { n, star: h.star, pillar: h.pillar, topic: h.topic, score: h.score, companyPost, repostCaption, firstComment, why, visual, raw, parsed };
 }
 
 function stripTrailingRule(s: string): string {
@@ -203,11 +238,12 @@ function splitDraft(md: string): {
 
 export function parseDraft(md: string): Draft {
   const { title, date, instruction, blocks, footer } = splitDraft(md);
+  const numbers = assignNumbers(blocks.map((b) => parseHeader(b.header)));
   return {
     date,
     title,
     instruction,
-    options: blocks.map((b) => parseOptionBlock(b.header, b.body)),
+    options: blocks.map((b, i) => parseOptionBlock(b.header, b.body, numbers[i])),
     footer,
   };
 }
@@ -216,7 +252,12 @@ export function parseDraft(md: string): Draft {
 // humanizing. Same option boundaries and header regexes as parseDraft (via splitDraft/parseHeader).
 export function parseDraftMeta(md: string): DraftMeta {
   const { date, blocks } = splitDraft(md);
-  return { date, options: blocks.map((b) => parseHeader(b.header)) };
+  const headers = blocks.map((b) => parseHeader(b.header));
+  const numbers = assignNumbers(headers);
+  return {
+    date,
+    options: headers.map((h, i) => ({ ...h, n: numbers[i] })),
+  };
 }
 
 /**
@@ -243,12 +284,12 @@ export function removeOptionFromMarkdown(
     if (/^#{2,3}\s+/.test(lines[i])) optionStarts.push(i);
   }
 
-  // Match the target on the same header parse the rest of the app uses, so "delete Option 3"
-  // hits exactly the block the UI labelled Option 3.
-  const target = optionStarts.findIndex((start) => {
-    const h = parseHeader(lines[start]);
-    return h.parsedHeader && h.n === n;
-  });
+  // Match the target on the same header parse + numbering the rest of the app uses, so
+  // "delete Option 3" hits exactly the block the UI labelled Option 3 (incl. generic headers
+  // numbered by position).
+  const headers = optionStarts.map((start) => parseHeader(lines[start]));
+  const numbers = assignNumbers(headers);
+  const target = numbers.findIndex((num, i) => headers[i].parsedHeader && num === n);
   if (target === -1) return { md, remaining: optionStarts.length, removed: false };
 
   const start = optionStarts[target];

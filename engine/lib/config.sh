@@ -64,6 +64,7 @@ export CFG_BRAND_TAGLINE="$(_get '.brand.tagline' '')"
 export CFG_BRAND_OFFERS="$(_get '.brand.offers' '')"
 export CFG_BRAND_VIBE="$(_get '.brand.vibe' '')"
 export CFG_LOGO_PATH="$(_expand "$(_get '.brand.logoPath' '')")"
+export CFG_BRAND_SITE_URL="$(_get '.brand.siteUrl' '')"
 
 # --- day job (excluded from harvest; named so the model knows what NOT to post) ---
 export CFG_DAYJOB_NAME="$(_get '.dayJob.name' '')"
