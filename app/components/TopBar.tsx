@@ -1,10 +1,23 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import ThemeSwitcher from "./ThemeSwitcher";
 
 export default function TopBar({ brandName }: { brandName: string }) {
   const reduce = useReducedMotion();
+  const [quitting, setQuitting] = useState(false);
+
+  async function quit() {
+    if (!confirm("Stop the shippost server? The app will close and the browser tab can be closed.")) return;
+    setQuitting(true);
+    try {
+      await fetch("/api/quit", { method: "POST" });
+    } catch {
+      /* server is going down — the fetch dropping is expected */
+    }
+  }
+
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-bg/80 backdrop-blur">
       <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-3">
@@ -42,8 +55,34 @@ export default function TopBar({ brandName }: { brandName: string }) {
             </svg>
           </Link>
           <ThemeSwitcher />
+          <button
+            type="button"
+            onClick={quit}
+            aria-label="Quit shippost"
+            title="Quit shippost (stop the server)"
+            className="text-muted transition hover:text-red-500"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 2v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path
+                d="M7.5 6.5a8 8 0 109 0"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
         </div>
       </div>
+      {quitting && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-2 bg-bg/95 backdrop-blur">
+          <p className="font-mono text-lg font-bold text-fg">shippost stopped</p>
+          <p className="text-sm text-muted">
+            Server shut down. You can close this tab — relaunch with <code>npm run dev</code> (or
+            your own launcher) anytime.
+          </p>
+        </div>
+      )}
     </header>
   );
 }
