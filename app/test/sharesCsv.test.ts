@@ -39,6 +39,13 @@ describe("parseShares — CSV", () => {
     expect(r.posts.some((p) => p === "post number 1")).toBe(false);
   });
 
+  it("orders non-ISO (US M/D/YYYY) dates chronologically, not lexically", () => {
+    // lexically "9/..." > "10/...", so a string sort would call September the newest
+    const csv = `Date,ShareCommentary\n10/01/2025,"october post"\n9/01/2025,"september post"\n`;
+    const r = parseShares(Buffer.from(csv), "Shares.csv");
+    expect(r.posts).toEqual(["september post", "october post"]);
+  });
+
   it("throws a clear error when no commentary column exists", () => {
     const csv = `Date,ShareLink\n2025-01-01,http://x\n`;
     expect(() => parseShares(Buffer.from(csv), "Shares.csv")).toThrow(/column/i);

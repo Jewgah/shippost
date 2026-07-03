@@ -7,12 +7,10 @@ import { blockCrossSite } from "@/lib/guard";
 import { PILLAR_LABELS } from "@/lib/theme";
 import { cleanField } from "@/lib/steering";
 import { readSettings } from "@/lib/settings";
+import { acquireRunLock, STALE_MS } from "@/lib/runLock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-
-const STALE_MS = 15 * 60 * 1000; // a run older than this is considered dead (well beyond a real ~1-5min run)
 
 function paths() {
   const { resolved } = loadConfig();
@@ -73,11 +71,9 @@ export async function POST(req: Request) {
   const { draftsDir, repoRoot, lock, result } = paths();
   fs.mkdirSync(draftsDir, { recursive: true });
 
-  const { running } = readRunning(lock);
-  if (running) return NextResponse.json({ started: false, running: true });
+  if (!acquireRunLock(lock)) return NextResponse.json({ started: false, running: true });
 
   const date = nowStamp();
-  fs.writeFileSync(lock, String(Date.now()), "utf8");
 
   const script = path.join(repoRoot, "engine", "generate.sh");
   const child = spawn("bash", [script, "--force"], {

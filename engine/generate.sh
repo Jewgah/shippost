@@ -25,6 +25,7 @@ MIN_GAP=$(( CFG_MIN_GAP_HOURS * 3600 ))
 mkdir -p "$BOOST_DIR"
 
 notify() { # $1 = message, $2 = sound (macOS only)
+  [ "${SHIPPOST_NO_NOTIFY:-0}" = "1" ] && return 0 # tests/CI: no desktop notifications
   if [ "$(uname)" = "Darwin" ]; then
     local url="http://localhost:${CFG_APP_PORT:-3030}/"
     # Resolve terminal-notifier even under a minimal launchd PATH: try PATH first,
@@ -57,7 +58,7 @@ notify() { # $1 = message, $2 = sound (macOS only)
 now=$(date +%s)
 if [ "$FORCE" -ne 1 ] && [ -f "$LAST_RUN" ]; then
   last=$(cat "$LAST_RUN" 2>/dev/null || echo 0)
-  [ -z "$last" ] && last=0
+  case "$last" in ''|*[!0-9]*) last=0 ;; esac # a corrupt .last_run must not break the arithmetic
   if [ $((now - last)) -lt "$MIN_GAP" ]; then
     echo "$(date '+%F %T') guard: only $((now - last))s since last run (< ${MIN_GAP}s), skipping" >> "$LOG"
     exit 0
@@ -92,6 +93,7 @@ else
   PROMPT="$PROMPT  Mode: PERSONAL-ONLY — write each option as ONE first-person post for the author's OWN LinkedIn profile (not a company page). Put that single post under '**A. Company post**' and OMIT section B entirely (no repost caption). Everything else (header, _Why it works:_, _Suggested visuals:_) stays as specified."
 fi
 
+# shellcheck disable=SC2086 # CFG_ALLOWED_TOOLS is a deliberate space-separated arg list
 "$CFG_CLAUDE_BIN" -p "$PROMPT" \
   --allowed-tools $CFG_ALLOWED_TOOLS \
   --model "$CFG_MODEL" \

@@ -68,9 +68,17 @@ export function parseShares(buf: Buffer, filename: string): ImportResult {
   });
 
   // Sort oldest → newest if we have a date, so the newest ends up appended last
-  // (harvest tails the most-recent posts).
+  // (harvest tails the most-recent posts). Compare as real timestamps when both sides
+  // parse — a lexical compare mis-orders non-ISO exports (e.g. US "6/12/2026") and would
+  // feed the wrong "most recent" posts into the voice corpus.
   if (dateCol) {
-    rows = rows.sort((a, b) => String(a[dateCol]).localeCompare(String(b[dateCol])));
+    const ts = (r: Record<string, string>) => Date.parse(String(r[dateCol]));
+    rows = rows.sort((a, b) => {
+      const ta = ts(a);
+      const tb = ts(b);
+      if (!Number.isNaN(ta) && !Number.isNaN(tb)) return ta - tb;
+      return String(a[dateCol]).localeCompare(String(b[dateCol]));
+    });
   }
 
   // Keep the most-recent IMPORT_CAP, preserving ascending order.

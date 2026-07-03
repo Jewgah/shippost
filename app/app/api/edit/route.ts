@@ -6,11 +6,10 @@ import { loadConfig } from "@/lib/config";
 import { blockCrossSite } from "@/lib/guard";
 import { cleanField } from "@/lib/steering";
 import { isDraftId } from "@/lib/draftId";
+import { acquireRunLock } from "@/lib/runLock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const STALE_MS = 15 * 60 * 1000;
 
 // Revise a single option in an existing draft. Reuses the `.generating` lock +
 // `.last_generate.json` so the existing GET /api/generate reports progress and no
@@ -40,10 +39,7 @@ export async function POST(req: Request) {
 
   const lock = path.join(resolved.draftsDir, ".generating");
   const result = path.join(resolved.draftsDir, ".last_generate.json");
-  if (fs.existsSync(lock) && Date.now() - fs.statSync(lock).mtimeMs < STALE_MS) {
-    return NextResponse.json({ started: false, running: true });
-  }
-  fs.writeFileSync(lock, String(Date.now()), "utf8");
+  if (!acquireRunLock(lock)) return NextResponse.json({ started: false, running: true });
 
   const script = path.join(resolved.repoRoot, "engine", "edit.sh");
   const child = spawn("bash", [script], {
