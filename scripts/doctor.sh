@@ -41,6 +41,11 @@ if node -e "require('$REPO_DIR/app/node_modules/sharp')" >/dev/null 2>&1; then
 else
   note "sharp not installed - run npm install in app/ before rendering images"
 fi
+if node -e "require('$REPO_DIR/app/node_modules/playwright')" >/dev/null 2>&1; then
+  ok "playwright available (builds carousel PDFs: cd app && npm run carousel)"
+else
+  note "playwright not installed - run npm install in app/ before building carousels"
+fi
 
 echo
 echo "Privacy (must stay untracked):"

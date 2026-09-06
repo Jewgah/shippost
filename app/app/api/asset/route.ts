@@ -15,31 +15,34 @@ const MIME: Record<string, string> = {
   ".gif": "image/gif",
   ".webp": "image/webp",
   ".svg": "image/svg+xml",
+  ".pdf": "application/pdf",
 };
 
 /**
- * A rendered option visual: `<draftsDir>/.visuals/<draftId>-o<N>.png`.
- * The filename is BUILT from a validated draft id and a clamped integer - the caller never
- * supplies a path fragment, so no traversal is possible even with a hostile query string.
+ * A per-option asset: `<draftsDir>/.visuals/<draftId>-o<N>.<ext>` - the rendered hero (`png`)
+ * or the built carousel (`pdf`).
+ * The filename is BUILT from a validated draft id, a clamped integer and an extension this
+ * file chooses - the caller never supplies a path fragment, so no traversal is possible even
+ * with a hostile query string.
  */
-function visualPath(date: string | null, option: string | null): string | null {
+function optionAssetPath(date: string | null, option: string | null, ext: "png" | "pdf"): string | null {
   if (!date || !isDraftId(date)) return null;
   const n = Number(option);
   if (!Number.isInteger(n) || n < 1 || n > 20) return null;
   const { resolved } = loadConfig();
-  return path.join(resolved.draftsDir, ".visuals", `${date}-o${n}.png`);
+  return path.join(resolved.draftsDir, ".visuals", `${date}-o${n}.${ext}`);
 }
 
-// Streams the brand logo (uploaded one wins over config), the author avatar, or a rendered
-// option visual. Only these known assets - never an arbitrary path.
+// Streams the brand logo (uploaded one wins over config), the author avatar, a rendered
+// option visual, or a built carousel PDF. Only these known assets - never an arbitrary path.
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const which = params.get("which");
   let file: string | null = null;
   if (which === "logo") file = effectiveLogoPath();
   else if (which === "avatar") file = uploadedAvatarPath();
-  else if (which === "visual") {
-    file = visualPath(params.get("date"), params.get("option"));
+  else if (which === "visual" || which === "carousel") {
+    file = optionAssetPath(params.get("date"), params.get("option"), which === "visual" ? "png" : "pdf");
     if (!file) return NextResponse.json({ error: "invalid draft id or option" }, { status: 400 });
   } else return NextResponse.json({ error: "unknown asset" }, { status: 400 });
 

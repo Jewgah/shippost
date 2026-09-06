@@ -73,6 +73,23 @@ land in your drafts dir under `.visuals/`, and ComfyUI also keeps its own copy i
 folder. Text in a generated image will be gibberish, that is what diffusion models do: keep
 words out of the prompt.
 
+### Carousels (optional)
+
+A LinkedIn "document post" is a PDF whose pages the feed shows as swipeable slides. One command
+turns any option into one, using its own post text for the slides and its rendered image (if you
+made one) behind the first:
+
+```bash
+cd app && npm run carousel -- 2026-09-06_145923 1   # <draft id> <option number>
+```
+
+It writes `<drafts dir>/.visuals/<draft id>-o<N>.pdf` at 1080x1350 per page, and the card in the
+app then offers a **Carousel PDF** link next to the image. Slides come from the paragraphs of the
+post, the closing slide carries the same link the option already puts in its first comment, and
+every word is real text in the PDF, never baked into the picture. Needs Node 22.18+ and the
+chromium Playwright installs (`npx playwright install chromium` if it is missing). Do not run it
+while an image is rendering: it refuses, because the image model is already using the memory.
+
 ## Requirements
 
 - [**Claude Code**](https://claude.com/claude-code), installed and signed in. The engine

@@ -19,6 +19,7 @@ export default function OptionCard({
   hasAvatar = false,
   initiallyRejected = false,
   initiallyRendered = false,
+  hasCarousel = false,
 }: {
   option: DraftOption;
   date: string;
@@ -32,6 +33,8 @@ export default function OptionCard({
   initiallyRejected?: boolean;
   /** True when a rendered PNG for this option already exists on disk. */
   initiallyRendered?: boolean;
+  /** True when a carousel PDF for this option already exists on disk (built by the CLI). */
+  hasCarousel?: boolean;
 }) {
   const [posted, setPosted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -63,6 +66,10 @@ export default function OptionCard({
   const visualUrl = `/api/asset?which=visual&date=${encodeURIComponent(date)}&option=${option.n}${
     renderNonce ? `&v=${renderNonce}` : ""
   }`;
+  // Carousel PDFs are built by `npm run carousel` in app/, never by the app: a build launches
+  // chromium and must not compete with a diffusion render for memory. The card only LINKS to
+  // one that already exists on disk.
+  const carouselUrl = `/api/asset?which=carousel&date=${encodeURIComponent(date)}&option=${option.n}`;
 
   useEffect(
     () => () => {
@@ -429,16 +436,20 @@ export default function OptionCard({
           )}
 
           {option.why && <p className="text-xs text-muted"><span className="text-fg/70">Why it works:</span> {option.why}</p>}
-          {option.visual && (
+          {(option.visual || hasCarousel) && (
             <div className="rounded-lg border border-border bg-bg/30 p-3 text-xs text-muted">
-              <div className="mb-1.5 flex items-center gap-2">
-                {showLogoThumb && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src="/api/asset?which=logo" alt="" className="h-7 w-7 rounded object-contain ring-1 ring-border" />
-                )}
-                <span className="font-semibold text-fg/70">Suggested visuals</span>
-              </div>
-              <div className="whitespace-pre-line leading-relaxed">{option.visual}</div>
+              {option.visual && (
+                <>
+                  <div className="mb-1.5 flex items-center gap-2">
+                    {showLogoThumb && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src="/api/asset?which=logo" alt="" className="h-7 w-7 rounded object-contain ring-1 ring-border" />
+                    )}
+                    <span className="font-semibold text-fg/70">Suggested visuals</span>
+                  </div>
+                  <div className="whitespace-pre-line leading-relaxed">{option.visual}</div>
+                </>
+              )}
 
               {rendered && (
                 <div className="mt-3">
@@ -502,6 +513,29 @@ export default function OptionCard({
                 </div>
               )}
               {renderErr && <p className="mt-1 text-xs text-red-400">{renderErr}</p>}
+
+              {hasCarousel && (
+                <div className={option.visual ? "mt-2.5 border-t border-border pt-2.5" : ""}>
+                  <a
+                    href={carouselUrl}
+                    download={`${date}-o${option.n}.pdf`}
+                    title="Upload this PDF to LinkedIn as a document post"
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded text-accent transition duration-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M7 3h7l5 5v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinejoin="round"
+                      />
+                      <path d="M14 3v5h5M9 13h6M9 17h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                    Carousel PDF
+                  </a>
+                  <span className="ml-2 text-muted">upload as a LinkedIn document post</span>
+                </div>
+              )}
             </div>
           )}
 

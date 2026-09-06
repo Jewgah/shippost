@@ -122,15 +122,15 @@ export function deleteOption(date: string, option: number): { remaining: number;
 }
 
 /**
- * Option numbers that already have a rendered visual on disk (`.visuals/<id>-o<N>.png`).
- * Read once, server-side, when the draft page renders, so a card knows to show the image
- * instead of firing an image request that 404s. `date` is validated first, so it can't
- * inject anything into the filename pattern.
+ * Option numbers with an asset of extension `ext` on disk under `.visuals/<id>-o<N>.<ext>`.
+ * Read once, server-side, when the draft page renders, so a card knows to offer the asset
+ * instead of firing a request that 404s. `date` is validated first, so it can't inject
+ * anything into the filename pattern; `.tmp` half-written files never match.
  */
-export function renderedVisualOptions(date: string): number[] {
+function assetOptions(date: string, ext: string): number[] {
   if (!isDraftId(date)) return [];
   const { resolved } = loadConfig();
-  const re = new RegExp(`^${date}-o(\\d+)\\.png$`);
+  const re = new RegExp(`^${date}-o(\\d+)\\.${ext}$`);
   try {
     return fs
       .readdirSync(path.join(resolved.draftsDir, ".visuals"))
@@ -141,6 +141,40 @@ export function renderedVisualOptions(date: string): number[] {
   } catch {
     return []; // no .visuals dir yet - nothing rendered
   }
+}
+
+/** Option numbers that already have a rendered hero image (`.visuals/<id>-o<N>.png`). */
+export function renderedVisualOptions(date: string): number[] {
+  return assetOptions(date, "png");
+}
+
+/**
+ * Option numbers that already have a built carousel (`.visuals/<id>-o<N>.pdf`), written by
+ * `app/scripts/build-carousel.mjs`. The app only ever LINKS to these - it never builds one,
+ * so there is no lock and no spawn on this path.
+ *
+ * A carousel older than the draft file is NOT listed. "Edit with AI" rewrites an option in
+ * place and keeps its number, so a PDF built before an edit would keep the same filename while
+ * containing copy the post no longer says - and unlike the hero PNG, this artefact carries the
+ * post text itself. Stale means gone from the card; rebuild to get it back.
+ */
+export function carouselOptions(date: string): number[] {
+  const built = assetOptions(date, "pdf");
+  if (!built.length) return built;
+  const { resolved } = loadConfig();
+  let draftMtime: number;
+  try {
+    draftMtime = fs.statSync(path.join(resolved.draftsDir, `${date}.md`)).mtimeMs;
+  } catch {
+    return built; // no draft file to compare against - do not hide what exists
+  }
+  return built.filter((n) => {
+    try {
+      return fs.statSync(path.join(resolved.draftsDir, ".visuals", `${date}-o${n}.pdf`)).mtimeMs >= draftMtime;
+    } catch {
+      return false;
+    }
+  });
 }
 
 export interface Status {

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { readDraft, getStatus, renderedVisualOptions } from "@/lib/drafts";
+import { readDraft, getStatus, renderedVisualOptions, carouselOptions } from "@/lib/drafts";
 import { rejectedOptionsByDraftId } from "@/lib/voice";
 import DraftCarousel from "@/components/DraftCarousel";
 import { formatDraftId } from "@/lib/draftId";
@@ -15,6 +15,7 @@ export default async function DraftPage({ params }: { params: Promise<{ date: st
   const status = getStatus();
   const rejectedOptions = rejectedOptionsByDraftId()[date] ?? [];
   const renderedOptions = renderedVisualOptions(date);
+  const builtCarousels = carouselOptions(date);
 
   return (
     <div>
@@ -42,6 +43,7 @@ export default async function DraftPage({ params }: { params: Promise<{ date: st
         hasAvatar={status.hasAvatar}
         rejectedOptions={rejectedOptions}
         renderedOptions={renderedOptions}
+        builtCarousels={builtCarousels}
       />
 
       {draft.footer && (

@@ -54,6 +54,23 @@ describe("renderedVisualOptions", () => {
     expect(renderedVisualOptions("2026-09-05_091738")).toEqual([1]);
   });
 
+  it("lists carousels separately from heroes, and hides one older than the draft it was built from", async () => {
+    const { carouselOptions, renderedVisualOptions } = await import("@/lib/drafts");
+    // "Edit with AI" rewrites an option in place and keeps its number, so a PDF built before an
+    // edit would keep its filename while holding copy the post no longer says.
+    fs.mkdirSync(visualsDir, { recursive: true });
+    fs.writeFileSync(path.join(visualsDir, "2026-09-06_145923-o2.pdf"), "x");
+    fs.writeFileSync(path.join(visualsDir, "2026-09-06_145923-o4.pdf"), "x");
+    fs.writeFileSync(path.join(tmp, "2026-09-06_145923.md"), "# draft");
+    // o2 predates the draft file, o4 postdates it
+    const draftMtime = fs.statSync(path.join(tmp, "2026-09-06_145923.md")).mtime;
+    fs.utimesSync(path.join(visualsDir, "2026-09-06_145923-o2.pdf"), draftMtime, new Date(draftMtime.getTime() - 60_000));
+    fs.utimesSync(path.join(visualsDir, "2026-09-06_145923-o4.pdf"), draftMtime, new Date(draftMtime.getTime() + 60_000));
+    expect(carouselOptions("2026-09-06_145923")).toEqual([4]);
+    // the hero listing is untouched by any of this
+    expect(renderedVisualOptions("2026-09-06_145923")).toEqual([1, 3]);
+  });
+
   it("refuses a malformed draft id instead of globbing the directory with it", async () => {
     const { renderedVisualOptions } = await import("@/lib/drafts");
     // A traversal attempt and a regex metacharacter both fail the draft-id guard, so neither
