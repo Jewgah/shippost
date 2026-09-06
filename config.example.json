@@ -13,7 +13,9 @@
     "offers": "what you build — e.g. web apps, mobile apps, AI systems",
     "vibe": "the feel — e.g. precise, playful, no-nonsense",
     "logoPath": "",
-    "siteUrl": ""
+    "siteUrl": "",
+    "audience": "the non-technical buyer your client-outcome posts speak to, e.g. the owner of a small business losing hours to a manual process (empty = no client-outcome pillar)",
+    "landingUrl": ""
   },
 
   "dayJob": {

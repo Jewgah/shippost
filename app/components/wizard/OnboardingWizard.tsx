@@ -3,13 +3,25 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
-type ImportResp = { added: number; found: number; totalRows: number; column: string; total: number; error?: string };
+type ImportResp = {
+  added: number;
+  found: number;
+  skipped?: number;
+  totalRows: number;
+  column: string;
+  total: number;
+  error?: string;
+};
+// What /api/import returns in preview mode: the detected column, counts, and the two most
+// recent posts, with NOTHING written yet. The user confirms these are theirs before the write.
+type PreviewResp = { preview: true; column: string; totalRows: number; found: number; usable: number; sample: string[]; error?: string };
 
 export default function OnboardingWizard({ authorName }: { authorName: string }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResp | null>(null);
+  const [pending, setPending] = useState<{ file: File; preview: PreviewResp } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [manual, setManual] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -25,18 +37,43 @@ export default function OnboardingWizard({ authorName }: { authorName: string })
     }
   };
 
+  // Step 1 of the import: preview only (nothing written), then show the sample for confirmation.
   const upload = async (file: File) => {
     setBusy(true);
     setError(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("preview", "1");
+      const res = await fetch("/api/import", { method: "POST", body: fd });
+      const json: PreviewResp = await res.json();
+      if (!res.ok) setError(json.error || "Import failed.");
+      else {
+        setPending({ file, preview: json });
+        setStep(3);
+      }
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Step 2 of the import: the real write, only after the user confirmed the sample is theirs.
+  const confirmImport = async () => {
+    if (!pending) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", pending.file);
       const res = await fetch("/api/import", { method: "POST", body: fd });
       const json: ImportResp = await res.json();
       if (!res.ok) setError(json.error || "Import failed.");
       else {
         setResult(json);
-        setStep(4);
+        setPending(null);
+        setStep(5);
       }
     } catch (e) {
       setError(String((e as Error).message));
@@ -57,8 +94,8 @@ export default function OnboardingWizard({ authorName }: { authorName: string })
       const json = await res.json();
       if (!res.ok) setError(json.error || "Save failed.");
       else {
-        setResult({ added: json.added, found: json.added, totalRows: json.added, column: "manual", total: json.total });
-        setStep(4);
+        setResult({ added: json.added, skipped: json.skipped, found: json.added, totalRows: json.added, column: "manual", total: json.total });
+        setStep(5);
       }
     } finally {
       setBusy(false);
@@ -154,14 +191,56 @@ export default function OnboardingWizard({ authorName }: { authorName: string })
       </div>
       {busy && <p className="text-sm text-muted">Reading your posts…</p>}
       {error && <p className="text-sm text-red-400">{error}</p>}
-      <button onClick={() => setStep(3)} className="text-sm text-muted underline hover:text-accent">
+      <button onClick={() => setStep(4)} className="text-sm text-muted underline hover:text-accent">
         I’d rather paste a few posts manually
       </button>
       <Nav onBack={() => setStep(1)} onSkip={finish} busy={busy} />
     </Panel>,
 
-    // 3 — manual paste
-    <Panel key="3" title="Paste a few posts">
+    // 3: confirm the sample before anything is written
+    <Panel key="3" title="Step 3: confirm these are your posts">
+      {pending && (
+        <>
+          <p>
+            Found <strong>{pending.preview.usable}</strong> usable post{pending.preview.usable === 1 ? "" : "s"} in the{" "}
+            <code className="font-mono text-accent">{pending.preview.column}</code> column ({pending.preview.found} row
+            {pending.preview.found === 1 ? "" : "s"} with text out of {pending.preview.totalRows}). Nothing is saved yet.
+          </p>
+          {pending.preview.usable === 0 ? (
+            <p className="text-sm text-red-400">
+              None of these look like posts (shorter than 150 characters, HTML, or a mail-merge template). Wrong file? Go
+              back and pick another one.
+            </p>
+          ) : (
+            <>
+              <ul className="space-y-2">
+                {pending.preview.sample.map((s, i) => (
+                  <li key={i} className="whitespace-pre-wrap rounded-lg border border-border bg-elevated p-3 text-xs text-fg/90">
+                    {s}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted">The two most recent posts found. If they are not yours, go back and pick another file.</p>
+            </>
+          )}
+        </>
+      )}
+      {error && <p className="text-sm text-red-400">{error}</p>}
+      <Nav
+        onBack={() => {
+          setPending(null);
+          setStep(2);
+        }}
+        onNext={confirmImport}
+        nextLabel="Yes, import these"
+        nextDisabled={!pending || pending.preview.usable === 0}
+        onSkip={finish}
+        busy={busy}
+      />
+    </Panel>,
+
+    // 4: manual paste
+    <Panel key="4" title="Paste a few posts">
       <p className="text-muted">Paste 3–5 posts you’ve written. Separate them with a line containing just <code className="font-mono">---</code>.</p>
       <textarea
         value={manual}
@@ -181,12 +260,18 @@ export default function OnboardingWizard({ authorName }: { authorName: string })
       />
     </Panel>,
 
-    // 4 — done
-    <Panel key="4" title="You’re set ✅">
+    // 5: done
+    <Panel key="5" title="You’re set ✅">
       {result && (
         <p>
           Added <strong>{result.added}</strong> post{result.added === 1 ? "" : "s"} to your voice corpus
           {result.column !== "manual" && <> (from the <code className="font-mono">{result.column}</code> column)</>}.
+          {result.skipped ? (
+            <span className="text-muted">
+              {" "}
+              {result.skipped} skipped (shorter than 150 characters, HTML, or a mail-merge template).
+            </span>
+          ) : null}
         </p>
       )}
       <p className="text-muted">
@@ -199,7 +284,7 @@ export default function OnboardingWizard({ authorName }: { authorName: string })
 
   return (
     <div className="mx-auto max-w-xl">
-      <Dots step={step} total={5} />
+      <Dots step={step} total={6} />
       <AnimatePresence mode="wait">
         <motion.div
           key={step}

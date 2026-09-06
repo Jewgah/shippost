@@ -10,18 +10,32 @@ export interface ImportResult {
   totalRows: number;
 }
 
+// LinkedIn's messages.csv (your DMs) sits next to Shares.csv in the full export and has a
+// CONTENT column, so it used to import cleanly as "your voice". It is rejected by name here,
+// and its column shape is no longer accepted below.
+const isMessagesCsv = (name: string) => /messages?\.csv$/i.test(name);
+const MESSAGES_HINT = "messages.csv holds your LinkedIn DMs, not your posts. Import Shares.csv (the posts export).";
+
 /** Pull the CSV text out of a LinkedIn export — accepts a raw .csv or the .zip. */
 function extractCsv(buf: Buffer, filename: string): string {
   const isZip = filename.toLowerCase().endsWith(".zip") || (buf[0] === 0x50 && buf[1] === 0x4b);
-  if (!isZip) return buf.toString("utf8");
+  if (!isZip) {
+    if (isMessagesCsv(filename)) throw new Error(MESSAGES_HINT);
+    return buf.toString("utf8");
+  }
 
   const zip = new AdmZip(buf);
-  const entries = zip.getEntries().filter((e) => !e.isDirectory);
-  // Prefer a "Shares.csv"-like entry; fall back to any .csv.
-  const shares =
-    entries.find((e) => /shares?.*\.csv$/i.test(e.entryName)) ??
-    entries.find((e) => /\.csv$/i.test(e.entryName));
-  if (!shares) throw new Error("No CSV found inside the ZIP (looked for Shares.csv).");
+  const csvs = zip.getEntries().filter((e) => !e.isDirectory && /\.csv$/i.test(e.entryName));
+  // Only a Shares-like entry qualifies. There is deliberately NO "any .csv" fallback: that is
+  // how a messages.csv once became the voice corpus, and a wrong file is worse than no file.
+  const shares = csvs.find((e) => /shares?[^/]*\.csv$/i.test(e.entryName) && !isMessagesCsv(e.entryName));
+  if (!shares) {
+    const names = csvs.map((e) => e.entryName).join(", ") || "(none)";
+    throw new Error(
+      `No Shares.csv inside the ZIP. CSV files found: ${names}. ` +
+        `Export your posts ("Shares"), not messages or connections, or import the extracted Shares.csv directly.`
+    );
+  }
   return shares.getData().toString("utf8");
 }
 
@@ -31,8 +45,9 @@ function findCommentaryColumn(fields: string[]): string | null {
   // Best match: contains "commentary"
   let col = fields.find((f) => lc(f).includes("commentary"));
   if (col) return col;
-  // Fallbacks
-  col = fields.find((f) => ["sharecommentary", "content", "text", "post", "message"].includes(lc(f)));
+  // Fallbacks. "content" and "message" are NOT here on purpose: they are the messages.csv
+  // (DMs) column names, and matching them is what polluted a corpus with cold-outreach DMs.
+  col = fields.find((f) => ["sharecommentary", "text", "post"].includes(lc(f)));
   return col ?? null;
 }
 

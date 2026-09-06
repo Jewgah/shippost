@@ -61,7 +61,9 @@ echo "  Name: $CFG_BRAND_NAME"
 [ -n "$CFG_BRAND_TAGLINE" ] && echo "  Tagline: \"$CFG_BRAND_TAGLINE\""
 [ -n "$CFG_BRAND_OFFERS" ]  && echo "  Offers: $CFG_BRAND_OFFERS"
 [ -n "$CFG_BRAND_VIBE" ]    && echo "  Vibe: $CFG_BRAND_VIBE"
-[ -n "$CFG_BRAND_SITE_URL" ] && echo "  Site URL: $CFG_BRAND_SITE_URL   (the ONLY link ever used as a first comment — never invent others)"
+[ -n "$CFG_BRAND_SITE_URL" ] && echo "  Site URL: $CFG_BRAND_SITE_URL   (the first-comment link for every pillar except client-outcome; never invent other links)"
+[ -n "$CFG_BRAND_AUDIENCE" ] && echo "  Audience (WHO THIS IS FOR): $CFG_BRAND_AUDIENCE"
+[ -n "$CFG_BRAND_LANDING_URL" ] && echo "  Landing URL: $CFG_BRAND_LANDING_URL   (the first-comment link for client-outcome posts ONLY; this exact URL, never extended)"
 echo "  IMPORTANT: you may name the brand and frame posts around it, but write in"
 echo "  the author's real, human first-person voice — do NOT copy marketing adjectives."
 [ -n "$CFG_LOGO_PATH" ] && [ -f "$CFG_LOGO_PATH" ] && echo "  (A brand logo exists; the author attaches it manually when they want it — NEVER suggest the logo as one of the 3 suggested visuals.)"
@@ -135,6 +137,12 @@ echo
 echo "### PILLAR cool-repo  — only if you genuinely tried something. NEVER claim to"
 echo "    have tried what you didn't."
 echo "### PILLAR lesson  — a concrete takeaway tied to real work above (a tradeoff, gotcha, mindset)."
+echo "### PILLAR client-outcome  - written for the Audience in the BRAND block: a named industry, the"
+echo "    manual process eating their hours, the before/after in hours or money, no tool name in the"
+echo "    hook, CTA to the Landing URL. It draws on WHO YOU ARE, the BRAND offers and the Audience,"
+echo "    NOT on commits: it is available every run, even when the commit window above is empty."
+echo "    Figures come from the harvest or an explicitly hypothetical frame; never an implied real"
+echo "    client result, never an invented case study."
 
 # ---------- ANTI-REPETITION: recent drafts ----------
 echo

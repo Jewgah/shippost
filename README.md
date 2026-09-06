@@ -25,10 +25,14 @@ entirely on your machine. No server, no accounts, nothing uploaded.
 ## What makes the posts good
 
 - **5 distinct options, ranked** — a multi-pass engine brainstorms ~10 angles, drafts
-  the best 5 across four pillars, then critiques, **humanizes**, scores, and ranks them
+  the best 5 across five pillars, then critiques, **humanizes**, scores, and ranks them
   (⭐ = top pick).
-- **Four pillars** rotate: *build-in-public* (a real shipped feature), *smart-AI-workflow*
-  (how you actually use AI — your differentiator), *cool-repo*, and *lesson*.
+- **Five pillars** rotate: *build-in-public* (a real shipped feature), *smart-AI-workflow*
+  (how you actually use AI — your differentiator), *cool-repo*, *lesson*, and
+  *client-outcome* (written for the buyer you describe in `brand.audience`: their manual
+  process, the before/after in hours or money, no tool name in the hook, a link to
+  `brand.landingUrl`). The two developer pillars are capped at 2 of the 5 options, and every
+  option is scored on whether a non-technical owner would recognise their own week in line 1.
 - **Your voice** — it reads posts you've already published (via LinkedIn's data export)
   and matches them; a humanize pass strips the AI tells.
 - **Scrubbed** — every client/customer name, secret, and internal URL is removed. It only
@@ -89,7 +93,12 @@ First launch walks you through importing your LinkedIn posts — see
 - **By hand:** run `/shippost` inside Claude Code (optionally `/shippost smart-ai-workflow`
   to nudge a pillar), or `bash engine/generate.sh --force`.
 - **On a schedule (optional, every 2 days):** the scheduler fires *daily*, and a ~46h guard
-  makes it land every other morning.
+  makes it land every other morning. Prefer one batch a week? Add a `Weekday` key to the
+  launchd interval (or `0` in the cron weekday field) and lower `engine.minGapHours` to 12:
+  the guard also counts app-button runs, so a Friday click would otherwise skip Sunday. Every
+  run leaves `.last_generate.json` in the drafts dir; failures also append to `.failures.log`,
+  and when you have not posted for more than 5 days the success notification says how many
+  drafts are waiting.
   > ⚠️ **macOS note:** a launchd agent can't read files in TCC-protected folders
   > (Desktop/Documents/Downloads). If your repos live there, grant **Full Disk Access** to
   > `/bin/bash` (System Settings → Privacy & Security), or just use the in-app button.
@@ -119,6 +128,8 @@ All settings live in `config.json` (copied from `config.example.json`). Highligh
 | `author.name`, `author.bio` | Who you are — grounds every post. |
 | `brand.{name,tagline,offers,vibe,logoPath}` | The company page you post to (your own brand). |
 | `brand.siteUrl` | Your site/portfolio URL — offered as each option's first-comment link (empty = no links, soft CTAs instead). |
+| `brand.audience` | Who the *client-outcome* posts speak to (an owner, not a developer). Empty = that pillar is skipped. |
+| `brand.landingUrl` | The page *client-outcome* posts link to in the first comment (an offer page, with prices). Empty = they use `siteUrl`. |
 | `dayJob.name`, `scrub.clientNames` | Names to **redact** — never posted about. |
 | `harvest.windowDays`, `recentPostsMax` | How far back to look; how many of your posts to feed the voice model. |
 | `output.draftsDir` | Where the dated draft files (one per run, and the app's data) live. |

@@ -9,6 +9,12 @@
   every OTHER day. launchd runs a missed calendar event on wake, so a sleeping
   Mac self-heals.
 
+  Weekly instead: add a Weekday key to StartCalendarInterval (0 = Sunday, 6 =
+  Saturday; the commented block below). The guard still applies to a weekly
+  schedule, and EVERY successful run resets it, the app's Generate button
+  included: with the default 46h an app run on Friday afternoon silently skips
+  the Sunday batch. Lower engine.minGapHours in config.json (12 is enough).
+
   PATH MUST include the dir holding the `claude` binary AND /usr/bin (for jq).
   Find claude's dir with:  dirname "$(command -v claude)"
 -->
@@ -38,6 +44,10 @@
         <integer>__HOUR__</integer>
         <key>Minute</key>
         <integer>__MINUTE__</integer>
+        <!-- Optional, weekly: uncomment for one batch per week (0 = Sunday).
+        <key>Weekday</key>
+        <integer>0</integer>
+        -->
     </dict>
 
     <key>StandardOutPath</key>

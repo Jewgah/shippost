@@ -20,6 +20,7 @@ bash <engine>/harvest.sh
 Read all of it:
 - **WHO YOU ARE** — the author's real profile/bio. **Ground every post in this**; you may draw on it for credibility, and never contradict it.
 - **BRAND** — the company page these posts go on, its tagline/offers/vibe (the author's own brand — safe to name).
+- **WHO THIS IS FOR** — the BRAND block's `Audience` line: the non-technical buyer the `client-outcome` pillar speaks to (an owner or ops lead, not a developer), and its `Landing URL`: the page those posts send readers to. When an Audience is present, at least one of the 5 options is written for that reader and its line 1 describes THEIR week, not yours. No Audience line = skip the `client-outcome` pillar and say so in the footer.
 - **SCRUB** — names/terms you must redact (day job, clients, customers).
 - recent commits (subjects + bodies + files) in the allowlisted repos,
 - the inventory of the author's custom Claude Code skills,
@@ -32,16 +33,19 @@ Note: the AI cannot see the author's live LinkedIn profile or published posts (l
 
 ## Step 2 — Ideate WIDE (think before writing)
 
-Brainstorm **~10 candidate angles** across all four pillars:
+Brainstorm **~10 candidate angles** across all five pillars:
 
 1. **build-in-public** — a real feature/fix shipped in an allowlisted repo (use the commit bodies/files for specifics). Story = problem → what you built → why it matters.
 2. **smart-ai-workflow** — how the author actually uses AI: a **custom skill they built** (from the inventory), multi-agent review, headless automation. **This is the differentiator — lean in.**
 3. **cool-repo / tool** — an OSS AI repo/tool genuinely worth sharing. **Never claim to have tried something you didn't.**
 4. **lesson / takeaway** — one concrete insight tied to the real work above.
+5. **client-outcome** — written for the WHO THIS IS FOR reader, not for other developers. Name an industry, the manual process that eats their hours (re-typing quotes into a CRM, answering the same WhatsApp questions, double entry between two tools), and the before/after in hours per week or money per month. **No tool name in the hook**: line 1 never says Claude, GPT, Next.js or any product; the owner does not care what it runs on. CTA to the Landing URL in the first comment. This pillar draws on WHO YOU ARE, the BRAND offers and the Audience, **not on commits**: it is available on every run, including an empty harvest window, so it never starves. **Truthfulness (strict):** every figure comes from the harvest (the bio, the offers, a real commit) or an explicitly hypothetical frame ("say you answer 40 WhatsApp questions a week"); never a named or implied real client result, never an invented case study, never "a client of mine saved X" unless X is in the harvest. No real number = use the hypothetical frame or drop the number.
 
 ## Step 3 — Select 5 DISTINCT
 
 Pick the 5 strongest, with **different topics** and **≥3 pillars** of spread. Don't repeat topics shown in "RECENT DRAFTS", and never offer an angle listed under "REJECTED ANGLES" (the author already thumbed it down). **Quality beats spread** — 5 strong posts across 3 pillars beat 5 forced across 4. Never invent a "cool-repo" you didn't try just to fill a slot.
+
+**Cap (hard):** `smart-ai-workflow` and `build-in-public` together take at most **2 of the 5** slots. The other 3 go to `client-outcome`, `lesson` and `cool-repo`. When the BRAND block has an Audience line, at least one option is `client-outcome`. Developer-audience content is the exception in a batch now, not the default: the feed is read by buyers too.
 
 ## Step 4 — SCRUB (every option, even your own repos)
 
@@ -57,6 +61,7 @@ For every option write:
 1. **Company post** — ready to paste on the brand page.
 2. **Personal repost caption** — 1–2 first-person lines the author adds when resharing to their own feed (their POV / the "why").
 3. **First comment** — the link to drop in the post's **first comment**, never the body (LinkedIn suppresses reach on posts with outbound links; a comment link doesn't). Pick by this ladder:
+   - A **`client-outcome`** option and the BRAND section lists a **Landing URL** → use that exact URL (frame it "the offer, with prices and what is included, is here"). No Landing URL → fall through to the Site URL rule below.
    - The harvest's BRAND section lists a **Site URL** and the post shows real build/work → use that exact URL (frame it "more of what I build"). **Never invent or extend a URL** (no guessed slugs/paths) — a 404 is worse than no link.
    - No Site URL configured, or a pure opinion/process post with nothing concrete to show → **omit section C entirely** (no header, no placeholder text) and end the post body with a soft one-line CTA instead ("happy to go deeper, DM me"). Don't bolt a link onto an unrelated post — it reads as spam and converts nothing.
    These links are `nofollow` (referral clicks, not SEO juice) — the point is sending warm viewers to the work. When there IS a link, end sections A/B with a plain `link in comments` line.
@@ -84,7 +89,7 @@ For every option write:
 
 ## Step 6 — Self-critique, score & rank
 
-Score each option 1–10 on: **Hook** (does line 1 stop the scroll?), **Specificity**, **Voice** (human, zero banned words), **Value** (reader learns/feels something), **CTA**. **Revise weak hooks** before finalizing. Then **rank 1→5** (descending) and mark **#1 with ⭐** as the recommended pick.
+Score each option 1–10 on: **Hook** (does line 1 stop the scroll?), **Specificity**, **Voice** (human, zero banned words), **Value** (reader learns/feels something), **CTA**, and **Owner recognition** (would a non-technical owner recognise their own week in line 1? For `client-outcome` this is the deciding dimension; for every other pillar it is the reminder that buyers read this feed too). **Any option under 5 on Owner recognition is rejected as written: rewrite its hook (usually: open on the problem a person has, not on the tool), or swap the angle, before ranking.** For `client-outcome`, also re-check the truthfulness rule from Step 2: any figure that is not in the harvest and not framed as hypothetical gets removed. **Revise weak hooks** before finalizing. Then **rank 1→5** (descending) and mark **#1 with ⭐** as the recommended pick.
 
 ## Step 6.5 — HUMANIZE (de-AI pass, before writing)
 
@@ -141,7 +146,7 @@ _Suggested visuals:_
 (Options 3, 4, 5 — same shape, descending score)
 
 ---
-pillars used: smart-ai-workflow, build-in-public, lesson, cool-repo, build-in-public
+pillars used: client-outcome, smart-ai-workflow, lesson, cool-repo, build-in-public
 sources (scrubbed): <one short source per option>
 scrubbed: yes (no clients, no secrets)
 ```
@@ -153,6 +158,6 @@ scrubbed: yes (no clients, no secrets)
 
 ## No-material fallback
 
-If the window is thin, still produce 5 — backfill with **smart-ai-workflow** angles from the skills inventory (always available) and **lesson** angles, rather than forcing weak build-in-public posts. Keep the header line and the per-option header format.
+If the window is thin, still produce 5 — backfill with **client-outcome** angles (they need no commits: the bio, the offers and the Audience are always in the harvest; the truthfulness rule still applies), **lesson** angles, and **smart-ai-workflow** angles from the skills inventory within the 2-of-5 cap, rather than forcing weak build-in-public posts. Keep the header line and the per-option header format.
 
 $ARGUMENTS

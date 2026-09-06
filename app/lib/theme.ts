@@ -11,4 +11,5 @@ export const PILLAR_LABELS: Record<string, string> = {
   "smart-ai-workflow": "smart AI workflow",
   "cool-repo": "cool repo",
   lesson: "lesson",
+  "client-outcome": "client outcome",
 };

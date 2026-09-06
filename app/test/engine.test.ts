@@ -94,4 +94,77 @@ describe("generate.sh", () => {
     const log = fs.readFileSync(path.join(draftsDir, ".run.log"), "utf8");
     expect(log).toContain("starting generation");
   }, 20_000);
+
+  it("a failed run leaves .last_generate.json (ok=false, app shape) and a .failures.log entry", () => {
+    fs.writeFileSync(path.join(draftsDir, ".last_run"), "0\n");
+    const stamp = "2031-01-01_000000";
+    try {
+      sh("generate.sh", { SHIPPOST_STAMP: stamp });
+    } catch {
+      /* claudeBin is /usr/bin/false: the failure branch is what's under test */
+    }
+    const result = JSON.parse(fs.readFileSync(path.join(draftsDir, ".last_generate.json"), "utf8"));
+    expect(result).toMatchObject({ ok: false, date: stamp, code: 1 });
+    expect(typeof result.finishedAt).toBe("number");
+    const failures = fs.readFileSync(path.join(draftsDir, ".failures.log"), "utf8");
+    expect(failures).toContain(`FAILED rc=1 draft_exists=no stamp=${stamp}`);
+    const log = fs.readFileSync(path.join(draftsDir, ".run.log"), "utf8");
+    expect(log).toContain("notify: draft generation FAILED (rc=1)");
+  }, 20_000);
+});
+
+// Success path against a stub "claude" that writes the draft where the engine expects it.
+// Separate drafts dir so the failure tests above can't leak a .failures.log into it.
+describe("generate.sh (success path, stub claude)", () => {
+  let okDir: string;
+  let okCfg: string;
+  const DAY_MS = 86_400_000;
+  const run = (stamp: string) =>
+    sh("generate.sh", { SHIPPOST_CONFIG: okCfg, SHIPPOST_STAMP: stamp, SHIPPOST_FORCE: "1" });
+  const pick = (date: string, ts: number) =>
+    JSON.stringify({ ts: new Date(ts).toISOString(), date, option: 1, pillar: "lesson", topic: "t" }) + "\n";
+
+  beforeAll(() => {
+    okDir = path.join(tmp, "drafts-ok");
+    fs.mkdirSync(okDir, { recursive: true });
+    const stub = path.join(tmp, "claude-stub.sh");
+    fs.writeFileSync(stub, `#!/bin/bash\nprintf '# LinkedIn drafts\\n' > "${okDir}/\${SHIPPOST_STAMP}.md"\n`);
+    fs.chmodSync(stub, 0o755);
+    okCfg = path.join(tmp, "config-ok.json");
+    fs.writeFileSync(
+      okCfg,
+      JSON.stringify({
+        author: { name: "Test Author" },
+        brand: { name: "TestBrand" },
+        harvest: { repoAllowlistFile: "does-not-matter.txt", skillsRoot: path.join(tmp, "skills") },
+        output: { draftsDir: okDir },
+        engine: { claudeBin: stub, minGapHours: 46 },
+      })
+    );
+  });
+
+  it("writes .last_generate.json ok=true, no .failures.log, and the plain notification when the author posted recently", () => {
+    fs.writeFileSync(path.join(okDir, ".picks.jsonl"), pick("2030-12-31_000000", Date.now() - 3_600_000));
+    const stamp = "2031-01-01_000000";
+    run(stamp);
+    expect(fs.existsSync(path.join(okDir, `${stamp}.md`))).toBe(true);
+    const result = JSON.parse(fs.readFileSync(path.join(okDir, ".last_generate.json"), "utf8"));
+    expect(result).toMatchObject({ ok: true, date: stamp, code: 0 });
+    expect(fs.existsSync(path.join(okDir, ".failures.log"))).toBe(false);
+    const log = fs.readFileSync(path.join(okDir, ".run.log"), "utf8");
+    expect(log).toContain("notify: 5 drafts ready");
+    expect(log).not.toContain("you have not posted");
+  }, 20_000);
+
+  it("nudges with days since the last pick and the unpicked drafts newer than it (ms timestamps, like the app writes)", () => {
+    // Newest pick 30 days (+1h) ago, of the draft the previous test generated; a second
+    // duplicate line of the same pick must not change anything.
+    const stale = pick("2031-01-01_000000", Date.now() - 30 * DAY_MS - 3_600_000);
+    fs.writeFileSync(path.join(okDir, ".picks.jsonl"), stale + stale);
+    fs.writeFileSync(path.join(okDir, "2031-01-02_000000.md"), "# LinkedIn drafts\n"); // unpicked, newer
+    fs.writeFileSync(path.join(okDir, "2030-06-01_000000.md"), "# LinkedIn drafts\n"); // unpicked, OLDER: not counted
+    run("2031-01-03_000000"); // this run's own draft counts too
+    const log = fs.readFileSync(path.join(okDir, ".run.log"), "utf8");
+    expect(log).toContain("notify: you have not posted in 30 days, 2 drafts waiting");
+  }, 20_000);
 });

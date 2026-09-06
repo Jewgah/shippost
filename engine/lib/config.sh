@@ -65,6 +65,11 @@ export CFG_BRAND_OFFERS="$(_get '.brand.offers' '')"
 export CFG_BRAND_VIBE="$(_get '.brand.vibe' '')"
 export CFG_LOGO_PATH="$(_expand "$(_get '.brand.logoPath' '')")"
 export CFG_BRAND_SITE_URL="$(_get '.brand.siteUrl' '')"
+# WHO THIS IS FOR: the non-technical buyer the client-outcome pillar speaks to, and the page
+# those posts link to. Both optional: no audience = no client-outcome pillar, no landing URL
+# = client-outcome posts fall back to the site URL like every other pillar.
+export CFG_BRAND_AUDIENCE="$(_get '.brand.audience' '')"
+export CFG_BRAND_LANDING_URL="$(_get '.brand.landingUrl' '')"
 
 # --- day job (excluded from harvest; named so the model knows what NOT to post) ---
 export CFG_DAYJOB_NAME="$(_get '.dayJob.name' '')"

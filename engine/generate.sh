@@ -1,8 +1,10 @@
 #!/bin/bash
 # generate.sh — scheduler wrapper for the shippost content engine.
-#  - enforces the ~2-day gap (so daily firing => every other day)
+#  - enforces the minGapHours gap (so daily firing => every other day; a weekly schedule
+#    wants a lower gap, see engine/schedule/)
 #  - runs the engine headless on the user's own Claude subscription
-#  - notifies on success AND failure so silent breakage surfaces
+#  - notifies on success AND failure so silent breakage surfaces, writes the run's outcome
+#    to .last_generate.json, and appends failures to .failures.log
 #
 # Config-driven (sources lib/config.sh). Safe to run by hand or from launchd/cron.
 
@@ -100,11 +102,77 @@ fi
   >> "$LOG" 2>&1
 rc=$?
 
+RESULT="$BOOST_DIR/.last_generate.json"
+FAILURES="$BOOST_DIR/.failures.log"
+PICKS="$BOOST_DIR/$CFG_PICKS_LOG_FILE"
+
+# Machine-readable outcome of THIS run, in the shape the app writes after a button run
+# ({ok, date, finishedAt, code}; see app/app/api/generate/route.ts), so a scheduled run
+# leaves the same trace instead of a file only the app ever refreshed.
+write_result() { # $1 = ok (true|false), $2 = exit code
+  jq -nc --argjson ok "$1" --arg date "$stamp" --argjson finishedAt "$(( $(date +%s) * 1000 ))" --argjson code "$2" \
+    '{ok: $ok, date: $date, finishedAt: $finishedAt, code: $code}' > "$RESULT.tmp" 2>/dev/null \
+    && mv -f "$RESULT.tmp" "$RESULT"
+}
+
+# Unpicked drafts newer than the newest pick: draft ids sort lexically (YYYY-MM-DD_HHMMSS),
+# so "newer" is a string compare against the picked draft's id. $1 = that id.
+count_waiting() {
+  local picked n=0 f id
+  local LC_ALL=C # deterministic string compare whatever locale the caller runs under
+  picked="$(jq -R 'fromjson? | .date? // empty | select(type=="string")' "$PICKS" 2>/dev/null | jq -rs 'unique[]' 2>/dev/null)"
+  for f in "$BOOST_DIR"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*.md; do
+    [ -f "$f" ] || continue
+    id="$(basename "$f" .md)"
+    [[ "$id" > "$1" ]] || continue
+    grep -qxF "$id" <<< "$picked" && continue
+    n=$((n + 1))
+  done
+  printf '%s' "$n"
+}
+
+# The success notification: the plain "drafts ready" line, unless the author has gone quiet
+# (newest pick older than 5 days). Then it says for how long and how many drafts are waiting,
+# so a batch nobody reads stops looking like success. jq's fromdateiso8601 rejects the
+# fractional seconds every app-written ts carries, hence the sub() before parsing.
+success_message() {
+  local msg="5 drafts ready, open the shippost app and pick one"
+  [ -f "$PICKS" ] || { printf '%s' "$msg"; return; }
+  local newest last_epoch last_date days waiting
+  newest="$(jq -R 'fromjson? | select(type == "object" and (.ts | type) == "string" and (.date | type) == "string")
+                   | {date: .date, epoch: (.ts | sub("\\.[0-9]+"; "") | try fromdateiso8601 catch empty)}' "$PICKS" 2>/dev/null \
+            | jq -rs 'max_by(.epoch) // empty | "\(.epoch) \(.date)"' 2>/dev/null)"
+  [ -n "$newest" ] || { printf '%s' "$msg"; return; }
+  last_epoch="${newest%% *}"
+  last_date="${newest#* }"
+  days=$(( ($(date +%s) - last_epoch) / 86400 ))
+  if [ "$days" -gt 5 ]; then
+    waiting="$(count_waiting "$last_date")"
+    local unit="drafts"
+    [ "$waiting" -eq 1 ] && unit="draft"
+    msg="you have not posted in $days days, $waiting $unit waiting"
+  fi
+  printf '%s' "$msg"
+}
+
 if [ "$rc" -eq 0 ] && [ -f "$draft" ]; then
   date +%s > "$LAST_RUN"
+  write_result true "$rc"
   echo "$(date '+%F %T') SUCCESS: $draft" >> "$LOG"
-  notify "5 drafts ready — open the shippost app, pick one" "Glass"
+  msg="$(success_message)"
+  echo "$(date '+%F %T') notify: $msg" >> "$LOG"
+  notify "$msg" "Glass"
 else
-  echo "$(date '+%F %T') FAILED rc=$rc draft_exists=$([ -f "$draft" ] && echo yes || echo no)" >> "$LOG"
-  notify "draft generation FAILED (rc=$rc) — check .run.log in your drafts dir" "Basso"
+  exists="$([ -f "$draft" ] && echo yes || echo no)"
+  # One entry per failure in its own file (the run log buries them under the engine's own
+  # output), with the tail of this run's output for a first diagnosis.
+  {
+    echo "$(date '+%F %T') FAILED rc=$rc draft_exists=$exists stamp=$stamp"
+    tail -n 5 "$LOG" 2>/dev/null | sed 's/^/    /'
+  } >> "$FAILURES"
+  write_result false "$rc"
+  echo "$(date '+%F %T') FAILED rc=$rc draft_exists=$exists" >> "$LOG"
+  msg="draft generation FAILED (rc=$rc), see .failures.log in your drafts dir"
+  echo "$(date '+%F %T') notify: $msg" >> "$LOG"
+  notify "$msg" "Basso"
 fi

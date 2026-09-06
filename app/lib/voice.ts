@@ -26,7 +26,25 @@ function writeBlocks(file: string, blocks: string[]) {
   fs.writeFileSync(file, kept.join(SEP) + "\n", "utf8");
 }
 
-/** Append posts (dedup against what's already there), capped. Returns kept count added. */
+const MIN_POST_CHARS = 150;
+// A real tag (opening, closing or self-closing), not a "n<m" comparison in prose.
+const HTML_TAG_RE = /<\/?[a-z][a-z0-9-]*(\s[^<>]*)?\/?>/i;
+const MERGE_TOKEN_RE = /%[A-Z_]+%/;
+
+/**
+ * Is this block worth learning a voice from? Long enough to carry one, and not a DM or a
+ * mail-merge template (HTML from a mail tool, %FIRSTNAME% tokens). Second line of defence
+ * behind the import's Shares.csv-only rule: a 30-block batch of LinkedIn DMs once got in
+ * through the CSV fallback, and 29 of them fail at least one of these three checks. A real
+ * LinkedIn post that literally quotes an HTML tag is an accepted false positive (the routes
+ * report it as `skipped`, nothing is silent).
+ */
+export function looksLikePost(p: string): boolean {
+  const t = p.trim();
+  return t.length >= MIN_POST_CHARS && !HTML_TAG_RE.test(t) && !MERGE_TOKEN_RE.test(t);
+}
+
+/** Append posts (dedup against what's already there, drop what fails looksLikePost), capped. Returns count added. */
 export function addRecentPosts(posts: string[]): number {
   ensureDir();
   const { resolved } = loadConfig();
@@ -35,7 +53,7 @@ export function addRecentPosts(posts: string[]): number {
   let added = 0;
   for (const p of posts) {
     const norm = p.replace(/\s+/g, " ").trim().toLowerCase();
-    if (!norm || seen.has(norm)) continue;
+    if (!norm || seen.has(norm) || !looksLikePost(p)) continue;
     existing.push(p.trim());
     seen.add(norm);
     added++;
@@ -164,8 +182,30 @@ export function rejectedOptionsByDraftId(): Record<string, number[]> {
 export function pickData(): { pickedByDraftId: Record<string, number[]>; cadence: Cadence } {
   const { resolved } = loadConfig();
   const entries = readLogEntries(resolved.picksLogPath);
-  const stamps = entries.map((e) => Date.parse(e.ts)).filter((ms) => Number.isFinite(ms));
-  return { pickedByDraftId: groupOptionsByDraftId(entries), cadence: computeCadence(stamps, Date.now()) };
+  return { pickedByDraftId: groupOptionsByDraftId(entries), cadence: cadenceFromPicks(entries, Date.now()) };
+}
+
+export interface PickLike {
+  date: string;
+  option: number;
+  ts: string;
+}
+
+/**
+ * Cadence from raw pick entries, deduped on (date, option) keeping the EARLIEST ts. The same
+ * pick can be logged twice (a re-click on "I posted this" weeks later); counting it again
+ * inflated the total and, worse, moved "last posted" forward to a day nothing was posted.
+ */
+export function cadenceFromPicks(picks: PickLike[], nowMs: number): Cadence {
+  const earliest = new Map<string, number>();
+  for (const p of picks) {
+    const ms = Date.parse(p.ts);
+    if (!Number.isFinite(ms)) continue;
+    const key = `${p.date}#${p.option}`;
+    const prev = earliest.get(key);
+    if (prev === undefined || ms < prev) earliest.set(key, ms);
+  }
+  return computeCadence(Array.from(earliest.values()), nowMs);
 }
 
 export interface Cadence {

@@ -107,12 +107,18 @@ function Toggle({ on, disabled, onClick }: { on: boolean; disabled?: boolean; on
   );
 }
 
+type Preview = { column: string; found: number; totalRows: number; usable: number; sample: string[] };
+
 function VoiceUploads({ onChange }: { onChange: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [manual, setManual] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // A dropped file is previewed first (nothing written); the write happens on "Yes, import these".
+  const [pending, setPending] = useState<{ file: File; preview: Preview } | null>(null);
+
+  const skippedNote = (n: number | undefined) => (n ? ` ${n} skipped (too short, HTML, or a mail-merge template).` : "");
 
   const upload = async (file: File) => {
     setBusy(true);
@@ -121,11 +127,29 @@ function VoiceUploads({ onChange }: { onChange: () => void }) {
     try {
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("preview", "1");
+      const r = await fetch("/api/import", { method: "POST", body: fd });
+      const j = await r.json();
+      if (!r.ok) setErr(j.error || "Import failed.");
+      else setPending({ file, preview: j });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!pending) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", pending.file);
       const r = await fetch("/api/import", { method: "POST", body: fd });
       const j = await r.json();
       if (!r.ok) setErr(j.error || "Import failed.");
       else {
-        setMsg(`Added ${j.added} post${j.added === 1 ? "" : "s"} (${j.total} total).`);
+        setMsg(`Added ${j.added} post${j.added === 1 ? "" : "s"} (${j.total} total).${skippedNote(j.skipped)}`);
+        setPending(null);
         onChange();
       }
     } finally {
@@ -147,7 +171,7 @@ function VoiceUploads({ onChange }: { onChange: () => void }) {
       const j = await r.json();
       if (!r.ok) setErr(j.error || "Save failed.");
       else {
-        setMsg(`Added ${j.added} post${j.added === 1 ? "" : "s"}.`);
+        setMsg(`Added ${j.added} post${j.added === 1 ? "" : "s"}.${skippedNote(j.skipped)}`);
         setManual("");
         onChange();
       }
@@ -183,6 +207,45 @@ function VoiceUploads({ onChange }: { onChange: () => void }) {
           }}
         />
       </div>
+      {pending && (
+        <div className="space-y-2 rounded-xl border border-border bg-elevated/40 p-3">
+          <p className="text-xs text-fg">
+            Found <strong>{pending.preview.usable}</strong> usable post{pending.preview.usable === 1 ? "" : "s"} in the{" "}
+            <code className="font-mono text-accent">{pending.preview.column}</code> column ({pending.preview.found} row
+            {pending.preview.found === 1 ? "" : "s"} with text out of {pending.preview.totalRows}). Nothing is saved yet.
+          </p>
+          {pending.preview.usable === 0 ? (
+            <p className="text-xs text-red-400">None of these look like posts (too short, HTML, or a mail-merge template). Wrong file?</p>
+          ) : (
+            <>
+              {pending.preview.sample.map((s, i) => (
+                <p key={i} className="whitespace-pre-wrap rounded-lg border border-border bg-elevated p-2.5 text-xs text-fg/90">
+                  {s}
+                </p>
+              ))}
+              <p className="text-[11px] text-muted">The two most recent posts found. Import only if they are yours.</p>
+            </>
+          )}
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={confirmImport}
+              disabled={busy || pending.preview.usable === 0}
+              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-40"
+            >
+              {busy ? "importing…" : "Yes, import these"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPending(null)}
+              disabled={busy}
+              className="rounded-lg border border-border bg-elevated px-3 py-1.5 text-xs text-fg transition hover:border-accent hover:text-accent disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       <details className="text-sm">
         <summary className="cursor-pointer text-xs text-muted hover:text-accent">…or paste a few posts manually</summary>
         <textarea

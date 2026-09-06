@@ -80,6 +80,31 @@ describe("voice.pickedOptionsByDraftId", () => {
     expect(pickedOptionsByDraftId()).toEqual({ "2026-06-01_094222": [4] });
   });
 
+  it("cadence dedupes the same (date, option) logged twice, keeping the EARLIEST ts", async () => {
+    // Regression: one pick was logged on 06-10 and again on 06-19; the cadence counted two
+    // posts and reported the 19th as the last posting day.
+    const { cadenceFromPicks, pickData } = await import("@/lib/voice");
+    const first = "2026-06-10T23:54:46.194Z";
+    const again = "2026-06-19T15:14:17.595Z";
+    const picks = [
+      { date: "2026-06-11_015716", option: 1, ts: first },
+      { date: "2026-06-19_120000", option: 2, ts: again }, // a different pick on the 19th stays counted
+      { date: "2026-06-11_015716", option: 1, ts: again }, // the duplicate
+    ];
+    const now = Date.parse("2026-06-21T00:00:00.000Z");
+    const c = cadenceFromPicks(picks, now);
+    expect(c.total).toBe(2);
+    expect(c.lastPostedAt).toBe(again);
+    // the duplicate alone must not move "last posted" to the re-log day
+    const dupOnly = cadenceFromPicks([picks[0], picks[2]], now);
+    expect(dupOnly.total).toBe(1);
+    expect(dupOnly.lastPostedAt).toBe(first);
+    // same through the file-backed path the home page uses
+    fs.writeFileSync(picksPath, picks.map((p) => JSON.stringify({ ...p, pillar: "x", topic: "y" })).join("\n") + "\n");
+    expect(pickData().cadence.total).toBe(2);
+    expect(pickData().pickedByDraftId).toEqual({ "2026-06-11_015716": [1], "2026-06-19_120000": [2] });
+  });
+
   it("caps the picks log at PICKS_CAP so it can't grow unbounded", async () => {
     const { recordPick, PICKS_CAP } = await import("@/lib/voice");
     for (let i = 0; i < PICKS_CAP + 10; i++) {

@@ -25,7 +25,13 @@ onto the drop zone. shippost:
 - auto-detects the commentary column (names vary by export version/locale),
 - drops empty rows (reshares with no comment) and link-only posts,
 - keeps your most recent ~30 posts,
-- writes them to `recent-posts.md` in your drafts folder.
+- shows you the detected column and your two most recent posts first, and writes them to
+  `recent-posts.md` in your drafts folder only after you confirm they are yours.
+
+Only `Shares.csv` is accepted. The full archive also contains `messages.csv` (your DMs):
+that file is refused by name and by shape, because a corpus of cold DMs makes the drafts
+sound like a mail merge. Blocks shorter than 150 characters, HTML, or mail-merge tokens
+(`%FIRSTNAME%`) are skipped on every import path, and the app tells you how many.
 
 You can re-import anytime from the wizard (visit `/onboarding`). And every post you
 mark **"I posted this"** in the app is appended to the corpus automatically, so your

@@ -60,6 +60,12 @@ describe("parseShares — CSV", () => {
   });
 });
 
+// The shape of LinkedIn's messages.csv (DMs): a CONTENT column, no commentary column.
+const MESSAGES_CSV = `CONVERSATION ID,CONVERSATION TITLE,FROM,SENDER PROFILE URL,TO,RECIPIENT PROFILE URLS,DATE,SUBJECT,CONTENT,FOLDER
+c1,,Someone,http://x,Me,http://y,2025-01-01 10:00:00 UTC,,"Hi %FIRSTNAME%, quick question about your team",INBOX
+c2,,Me,http://y,Someone,http://x,2025-01-02 10:00:00 UTC,,"Oui",INBOX
+`;
+
 describe("parseShares — ZIP", () => {
   it("finds Shares.csv inside a .zip", () => {
     const zip = new AdmZip();
@@ -69,5 +75,34 @@ describe("parseShares — ZIP", () => {
     const r = parseShares(buf, "export.zip");
     expect(r.column).toBe("ShareCommentary");
     expect(r.posts).toHaveLength(2);
+  });
+
+  it("a zip with messages.csv and no Shares.csv throws, naming the CSVs it saw (no first-.csv fallback)", () => {
+    // Regression: this exact zip once imported 30 DMs as the voice corpus.
+    const zip = new AdmZip();
+    zip.addFile("LinkedInExport/messages.csv", Buffer.from(MESSAGES_CSV, "utf8"));
+    zip.addFile("LinkedInExport/Connections.csv", Buffer.from("a,b\n1,2\n", "utf8"));
+    expect(() => parseShares(zip.toBuffer(), "export.zip")).toThrow(/messages\.csv.*Connections\.csv|Connections\.csv.*messages\.csv/);
+    expect(() => parseShares(zip.toBuffer(), "export.zip")).toThrow(/Shares\.csv/);
+  });
+
+  it("Shares.csv still wins when messages.csv sits next to it", () => {
+    const zip = new AdmZip();
+    zip.addFile("LinkedInExport/messages.csv", Buffer.from(MESSAGES_CSV, "utf8"));
+    zip.addFile("LinkedInExport/Shares.csv", Buffer.from(CSV, "utf8"));
+    const r = parseShares(zip.toBuffer(), "export.zip");
+    expect(r.column).toBe("ShareCommentary");
+    expect(r.posts).toHaveLength(2);
+  });
+});
+
+describe("parseShares — messages.csv is never a voice corpus", () => {
+  it("a raw file named messages.csv is rejected by name", () => {
+    expect(() => parseShares(Buffer.from(MESSAGES_CSV), "messages.csv")).toThrow(/DMs, not your posts/);
+  });
+
+  it("a renamed messages export (CONTENT column, no commentary) finds no post column", () => {
+    // "content" and "message" left the fallback list: the DM column shape must not import.
+    expect(() => parseShares(Buffer.from(MESSAGES_CSV), "Shares.csv")).toThrow(/column/i);
   });
 });
