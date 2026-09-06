@@ -177,6 +177,56 @@ function extractVisuals(text: string): string {
   return stripTrailingRule((inline ? inline + "\n" : "") + after).trim();
 }
 
+/** One numbered idea from the "Suggested visuals" block. */
+export interface VisualIdea {
+  n: number;
+  /** The idea in words, without the trailing `AI prompt: "…"` clause. */
+  text: string;
+  /** The ready-to-render prompt, or null when the idea isn't an AI image. */
+  prompt: string | null;
+  /** True for the screenshot idea, which is marked "(screenshot - no AI)". */
+  noAi: boolean;
+}
+
+// Strips the `- AI prompt: "…"` clause (and the separator before it) off an idea's text.
+const AI_PROMPT_RE = /AI prompt:\s*"([^"]+)"/i;
+
+/**
+ * Split a "Suggested visuals" block into its numbered ideas. The engine writes three per option
+ * (SKILL.md step 5): a scroll-stopper with a prompt, a screenshot marked "(screenshot - no AI)",
+ * and a third in a different lane, usually with a prompt too.
+ *
+ * Tolerant on purpose - the separator before the prompt is an em-dash in the SKILL template but
+ * comes out as a plain hyphen once the engine has humanized the file, so nothing here depends on it.
+ * Returns [] for an empty or unparseable block; the caller then just offers no render.
+ */
+export function parseVisualIdeas(visual: string): VisualIdea[] {
+  if (!visual) return [];
+  // split() with one capture group yields [pre, "1", body, "2", body, …]
+  const parts = visual.split(/^\s*(\d)\.\s/m);
+  const ideas: VisualIdea[] = [];
+  for (let i = 1; i + 1 < parts.length; i += 2) {
+    const n = parseInt(parts[i], 10);
+    const body = parts[i + 1].trim();
+    if (!body) continue;
+    const m = AI_PROMPT_RE.exec(body);
+    const text = body
+      .replace(AI_PROMPT_RE, "")
+      .replace(/[\s]*[\u2014\u2013-]\s*$/, "")
+      .trim();
+    // An idea that carries a prompt is renderable by definition, so it is never "no AI" -
+    // guarding on `!m` also stops the SKILL's own idea-3 wording ("no AI-art tells", which the
+    // model does echo into idea text) from marking a perfectly renderable idea as a screenshot.
+    ideas.push({ n, text, prompt: m ? m[1].trim() : null, noAi: !m && /\bno ai\b/i.test(body) });
+  }
+  return ideas;
+}
+
+/** The prompt the "Render image" button uses: the first idea that has one (idea 1, the star slot). */
+export function firstRenderablePrompt(visual: string): string | null {
+  return parseVisualIdeas(visual).find((v) => v.prompt)?.prompt ?? null;
+}
+
 interface RawBlock {
   header: string;
   body: string[];

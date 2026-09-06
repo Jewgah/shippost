@@ -121,6 +121,28 @@ export function deleteOption(date: string, option: number): { remaining: number;
   return { remaining, draftDeleted: false };
 }
 
+/**
+ * Option numbers that already have a rendered visual on disk (`.visuals/<id>-o<N>.png`).
+ * Read once, server-side, when the draft page renders, so a card knows to show the image
+ * instead of firing an image request that 404s. `date` is validated first, so it can't
+ * inject anything into the filename pattern.
+ */
+export function renderedVisualOptions(date: string): number[] {
+  if (!isDraftId(date)) return [];
+  const { resolved } = loadConfig();
+  const re = new RegExp(`^${date}-o(\\d+)\\.png$`);
+  try {
+    return fs
+      .readdirSync(path.join(resolved.draftsDir, ".visuals"))
+      .map((f) => re.exec(f)?.[1])
+      .filter((n): n is string => Boolean(n))
+      .map(Number)
+      .sort((a, b) => a - b);
+  } catch {
+    return []; // no .visuals dir yet - nothing rendered
+  }
+}
+
 export interface Status {
   firstLaunch: boolean;
   draftsDirExists: boolean;

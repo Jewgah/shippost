@@ -29,6 +29,20 @@ fi
 if [ -f engine/postable-projects.txt ]; then ok "postable-projects.txt exists"; else note "postable-projects.txt missing (build-in-public pillar will be empty)"; fi
 
 echo
+echo "Image render (optional - drafts work fine without it):"
+COMFY_URL="${SHIPPOST_COMFY_URL:-http://127.0.0.1:8188}"
+if curl -fsS -m 3 "$COMFY_URL/system_stats" >/dev/null 2>&1; then
+  ok "ComfyUI reachable at $COMFY_URL"
+else
+  note "ComfyUI not running (start it with: bash engine/comfy-headless.sh)"
+fi
+if node -e "require('$REPO_DIR/app/node_modules/sharp')" >/dev/null 2>&1; then
+  ok "sharp available (resizes renders to 1080x1350)"
+else
+  note "sharp not installed - run npm install in app/ before rendering images"
+fi
+
+echo
 echo "Privacy (must stay untracked):"
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   for f in config.json engine/postable-projects.txt; do

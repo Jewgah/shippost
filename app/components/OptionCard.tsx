@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import type { DraftOption } from "@/lib/draftParser";
+import { firstRenderablePrompt, type DraftOption } from "@/lib/draftParser";
 import { StarBadge, ScoreBadge, PillarTag } from "./badges";
 import ABSection from "./ABSection";
 import LinkedInPreview from "./LinkedInPreview";
@@ -18,6 +18,7 @@ export default function OptionCard({
   authorName = "",
   hasAvatar = false,
   initiallyRejected = false,
+  initiallyRendered = false,
 }: {
   option: DraftOption;
   date: string;
@@ -29,6 +30,8 @@ export default function OptionCard({
   authorName?: string;
   hasAvatar?: boolean;
   initiallyRejected?: boolean;
+  /** True when a rendered PNG for this option already exists on disk. */
+  initiallyRendered?: boolean;
 }) {
   const [posted, setPosted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -48,12 +51,69 @@ export default function OptionCard({
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
 
+  // Image render (local ComfyUI). The prompt is idea 1's "AI prompt" from the visuals block;
+  // an option whose ideas are all screenshots simply gets no button.
+  const renderPrompt = firstRenderablePrompt(option.visual);
+  const renderPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [rendered, setRendered] = useState(initiallyRendered);
+  const [rendering, setRendering] = useState(false);
+  const [renderErr, setRenderErr] = useState<string | null>(null);
+  // Bumped after each successful render so the <img> refetches instead of reusing the old bytes.
+  const [renderNonce, setRenderNonce] = useState(0);
+  const visualUrl = `/api/asset?which=visual&date=${encodeURIComponent(date)}&option=${option.n}${
+    renderNonce ? `&v=${renderNonce}` : ""
+  }`;
+
   useEffect(
     () => () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (renderPollRef.current) clearInterval(renderPollRef.current);
     },
     []
   );
+
+  // Kick off a render and poll the shared render state until it finishes. Deliberately its own
+  // lock/state file server-side, so this never collides with a generation or an AI edit.
+  const renderImage = async () => {
+    if (rendering || !renderPrompt) return;
+    setRenderErr(null);
+    setRendering(true);
+    try {
+      const res = await fetch("/api/render", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, option: option.n, prompt: renderPrompt }),
+      });
+      const j = await res.json();
+      if (!res.ok || j.started === false) {
+        setRendering(false);
+        setRenderErr(
+          j.error || (j.running ? "Another image is rendering - try again shortly." : "Couldn't start the render.")
+        );
+        return;
+      }
+      renderPollRef.current = setInterval(async () => {
+        try {
+          const s = await (await fetch("/api/render", { cache: "no-store" })).json();
+          if (s.running) return;
+          if (renderPollRef.current) clearInterval(renderPollRef.current);
+          setRendering(false);
+          if (s.lastResult?.ok) {
+            setRendered(true);
+            setRenderNonce((v) => v + 1);
+            router.refresh();
+          } else {
+            setRenderErr(s.lastResult?.error || "Render failed - check drafts/.comfy.log");
+          }
+        } catch {
+          /* transient - keep polling */
+        }
+      }, 3000);
+    } catch (e) {
+      setRendering(false);
+      setRenderErr(String((e as Error).message));
+    }
+  };
 
   const applyEdit = async () => {
     const p = editPrompt.trim();
@@ -87,7 +147,7 @@ export default function OptionCard({
             setEditErr(s.lastResult?.error || "Edit failed — check drafts/.run.log");
           }
         } catch {
-          /* transient — keep polling */
+          /* transient - keep polling */
         }
       }, 3000);
     } catch (e) {
@@ -379,6 +439,69 @@ export default function OptionCard({
                 <span className="font-semibold text-fg/70">Suggested visuals</span>
               </div>
               <div className="whitespace-pre-line leading-relaxed">{option.visual}</div>
+
+              {rendered && (
+                <div className="mt-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={visualUrl}
+                    alt={`Rendered visual for option ${option.n || "?"}`}
+                    loading="lazy"
+                    className="w-full rounded-lg border border-border"
+                  />
+                  <div className="mt-1.5 flex items-center gap-3">
+                    <a
+                      href={visualUrl}
+                      download={`${date}-o${option.n}.png`}
+                      className="inline-flex cursor-pointer items-center gap-1 rounded text-accent transition duration-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path
+                          d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      Download 1080x1350
+                    </a>
+                    {renderPrompt && (
+                      <button
+                        onClick={renderImage}
+                        disabled={rendering}
+                        className="cursor-pointer rounded text-muted transition duration-200 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:opacity-60"
+                      >
+                        {rendering ? "Rendering…" : "Render again"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!rendered && renderPrompt && (
+                <div className="mt-2.5">
+                  <motion.button
+                    onClick={renderImage}
+                    disabled={rendering}
+                    whileTap={reduce || rendering ? undefined : { scale: 0.96 }}
+                    title="Render idea 1 with your local ComfyUI"
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-elevated px-3 py-1.5 text-xs font-medium text-fg transition duration-200 hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:opacity-60"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm2 11l4-4 3 3 3-3 2 2M9 9.5a1 1 0 100-2 1 1 0 000 2z"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    {rendering ? "Rendering… ~1-2 min" : "Render image"}
+                  </motion.button>
+                </div>
+              )}
+              {renderErr && <p className="mt-1 text-xs text-red-400">{renderErr}</p>}
             </div>
           )}
 

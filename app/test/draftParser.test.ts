@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { normalizeDraftMarkdown, parseDraft, parseDraftMeta, removeOptionFromMarkdown } from "@/lib/draftParser";
+import {
+  firstRenderablePrompt,
+  normalizeDraftMarkdown,
+  parseDraft,
+  parseDraftMeta,
+  parseVisualIdeas,
+  removeOptionFromMarkdown,
+} from "@/lib/draftParser";
 
 const WELL_FORMED = `# LinkedIn drafts — 2026-05-31 · 5 options, ranked · pick ONE
 
@@ -440,5 +447,92 @@ _Suggested visuals:_
     expect(removed).toBe(false);
     expect(remaining).toBe(2);
     expect(md).toBe(WELL_FORMED); // unchanged
+  });
+});
+
+// The visuals block as the engine actually writes it: idea 1 carries the render prompt, idea 2 is
+// the screenshot, idea 3 is a second prompt in a different lane. Content is invented - the SHAPE
+// (numbering, the "- AI prompt:" clause, the "(screenshot - no AI)" marker, the multi-line wrap)
+// is what a real draft looks like after the engine humanizes the file into plain hyphens.
+const VISUALS = `1. A lighthouse keeper polishing a lamp while ships pass safely in a storm. - AI prompt: "dramatic oil painting, a lighthouse keeper polishing a great brass lamp, storm-tossed ships below, warm gold against deep blue, expressive brushwork"
+2. A split screen of the dashboard before and after, the alert count dropping from 40 to 2. (screenshot - no AI)
+3. A hand wiping condensation off a workshop window at dawn. - AI prompt: "candid documentary photo, a hand wiping condensation from a workshop window at dawn, natural light, shot on 35mm, subtle grain"`;
+
+describe("parseVisualIdeas - splits the suggested-visuals block into renderable ideas", () => {
+  it("parses the three ideas, their prompts, and the no-AI marker", () => {
+    const ideas = parseVisualIdeas(VISUALS);
+    expect(ideas).toHaveLength(3);
+    expect(ideas.map((i) => i.n)).toEqual([1, 2, 3]);
+
+    expect(ideas[0].prompt).toBe(
+      "dramatic oil painting, a lighthouse keeper polishing a great brass lamp, storm-tossed ships below, warm gold against deep blue, expressive brushwork"
+    );
+    expect(ideas[0].noAi).toBe(false);
+    // the text is the idea itself - the prompt clause and its separator are stripped
+    expect(ideas[0].text).toBe("A lighthouse keeper polishing a lamp while ships pass safely in a storm.");
+    expect(ideas[0].text).not.toContain("AI prompt");
+
+    expect(ideas[1].prompt).toBeNull();
+    expect(ideas[1].noAi).toBe(true); // the screenshot idea is never sent to the renderer
+
+    expect(ideas[2].prompt).toContain("candid documentary photo");
+  });
+
+  it("parses the em-dash separator the SKILL template specifies, not just the humanized hyphen", () => {
+    // The separator is written as an escape on purpose: the em-dash character itself is banned
+    // from files here, and it is exactly what SKILL.md's template emits before humanizing.
+    const EM = "\u2014";
+    const ideas = parseVisualIdeas(`1. A desk at night ${EM} AI prompt: "candid, natural light, 35mm"
+2. before/after (screenshot ${EM} no AI)`);
+    expect(ideas[0].prompt).toBe("candid, natural light, 35mm");
+    expect(ideas[0].text).toBe("A desk at night");
+    expect(ideas[1].noAi).toBe(true);
+  });
+
+  it("does NOT mark a renderable idea as no-AI just because its text says 'no AI-art tells'", () => {
+    // SKILL.md step 5 tells the model idea 3 must have "no AI-art tells" in it, and the model
+    // echoes that phrase into the idea text. A naive /no ai/ test would hide the render button.
+    const ideas = parseVisualIdeas(
+      '1. A candid shot with no AI-art tells in it. - AI prompt: "shot on 35mm, subtle grain"'
+    );
+    expect(ideas[0].noAi).toBe(false);
+    expect(ideas[0].prompt).toBe("shot on 35mm, subtle grain");
+    expect(ideas[0].text).toBe("A candid shot with no AI-art tells in it.");
+  });
+
+  it("keeps an idea whose lines wrap, and tolerates a block with no prompts at all", () => {
+    const wrapped = parseVisualIdeas(`1. A first line
+   that wrapped onto a second. - AI prompt: "one prompt"`);
+    expect(wrapped).toHaveLength(1);
+    expect(wrapped[0].prompt).toBe("one prompt");
+
+    const none = parseVisualIdeas("1. just a screenshot (screenshot - no AI)\n2. the brand logo");
+    expect(none).toHaveLength(2);
+    expect(none.every((i) => i.prompt === null)).toBe(true);
+  });
+
+  it("returns [] for an empty or prompt-less block", () => {
+    expect(parseVisualIdeas("")).toEqual([]);
+    expect(parseVisualIdeas("no numbered ideas here")).toEqual([]);
+  });
+
+  it("firstRenderablePrompt picks idea 1's prompt, or null when nothing is renderable", () => {
+    expect(firstRenderablePrompt(VISUALS)).toContain("dramatic oil painting");
+    // idea 1 is the screenshot here, so the first RENDERABLE prompt is idea 2's
+    expect(firstRenderablePrompt(`1. a screenshot (screenshot - no AI)
+2. a potter's hands - AI prompt: "macro photograph of wet clay"`)).toBe("macro photograph of wet clay");
+    expect(firstRenderablePrompt("1. a screenshot (screenshot - no AI)")).toBeNull();
+    expect(firstRenderablePrompt("")).toBeNull();
+  });
+});
+
+describe("parseVisualIdeas - reads the visuals off a parsed draft option", () => {
+  it("the block extracted by parseDraft feeds straight into parseVisualIdeas", () => {
+    const opt = parseDraft(WELL_FORMED).options[0];
+    const ideas = parseVisualIdeas(opt.visual);
+    expect(ideas).toHaveLength(3);
+    expect(ideas[0].noAi).toBe(true);
+    expect(ideas[1].prompt).toBe("candid, natural light, 35mm, subtle grain");
+    expect(firstRenderablePrompt(opt.visual)).toBe("candid, natural light, 35mm, subtle grain");
   });
 });

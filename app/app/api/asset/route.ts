@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
+import { loadConfig } from "@/lib/config";
+import { isDraftId } from "@/lib/draftId";
 import { effectiveLogoPath, uploadedAvatarPath } from "@/lib/settings";
 
 export const runtime = "nodejs";
@@ -15,14 +17,31 @@ const MIME: Record<string, string> = {
   ".svg": "image/svg+xml",
 };
 
-// Streams the brand logo (uploaded one wins over config) or the author avatar.
-// Only these two known assets — never an arbitrary path.
+/**
+ * A rendered option visual: `<draftsDir>/.visuals/<draftId>-o<N>.png`.
+ * The filename is BUILT from a validated draft id and a clamped integer - the caller never
+ * supplies a path fragment, so no traversal is possible even with a hostile query string.
+ */
+function visualPath(date: string | null, option: string | null): string | null {
+  if (!date || !isDraftId(date)) return null;
+  const n = Number(option);
+  if (!Number.isInteger(n) || n < 1 || n > 20) return null;
+  const { resolved } = loadConfig();
+  return path.join(resolved.draftsDir, ".visuals", `${date}-o${n}.png`);
+}
+
+// Streams the brand logo (uploaded one wins over config), the author avatar, or a rendered
+// option visual. Only these known assets - never an arbitrary path.
 export async function GET(req: Request) {
-  const which = new URL(req.url).searchParams.get("which");
+  const params = new URL(req.url).searchParams;
+  const which = params.get("which");
   let file: string | null = null;
   if (which === "logo") file = effectiveLogoPath();
   else if (which === "avatar") file = uploadedAvatarPath();
-  else return NextResponse.json({ error: "unknown asset" }, { status: 400 });
+  else if (which === "visual") {
+    file = visualPath(params.get("date"), params.get("option"));
+    if (!file) return NextResponse.json({ error: "invalid draft id or option" }, { status: 400 });
+  } else return NextResponse.json({ error: "unknown asset" }, { status: 400 });
 
   if (!file || !fs.existsSync(file)) {
     return NextResponse.json({ error: "not found" }, { status: 404 });

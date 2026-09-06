@@ -53,6 +53,26 @@ You can **steer a batch** before generating (a direction, a specific project, or
 **personal-only** (one first-person post per option, the default) and **company mode** (the
 company-page post plus a repost caption, A and B).
 
+### Images (optional)
+
+Every option comes with three visual ideas, and the first one carries a ready-to-render
+`AI prompt`. If you run a local [ComfyUI](https://github.com/comfyanonymous/ComfyUI) with a
+flux-schnell checkpoint, each card gets a **Render image** button that turns that prompt into a
+1080x1350 PNG (LinkedIn's tallest in-feed size), and the top pick renders on its own at the end
+of a scheduled batch.
+
+```bash
+bash engine/comfy-headless.sh        # start ComfyUI on 127.0.0.1:8188 (no GUI, no browser)
+```
+
+Nothing else changes if you skip this: with no ComfyUI running the button says so, the batch
+still generates, and the prompts are still there to paste into any image tool. The workflow
+lives in `engine/workflows/linkedin-hero-flux.json` (edit `ckpt_name` if your checkpoint has a
+different name); `SHIPPOST_COMFY_DIR` and `SHIPPOST_COMFY_URL` override where it looks. Renders
+land in your drafts dir under `.visuals/`, and ComfyUI also keeps its own copy in its `output/`
+folder. Text in a generated image will be gibberish, that is what diffusion models do: keep
+words out of the prompt.
+
 ## Requirements
 
 - [**Claude Code**](https://claude.com/claude-code), installed and signed in. The engine

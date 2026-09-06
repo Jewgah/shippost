@@ -155,6 +155,87 @@ success_message() {
   printf '%s' "$msg"
 }
 
+# Render the ⭐ option's image with the local ComfyUI, if one is already running. BEST EFFORT
+# ONLY: ComfyUI is optional, the renderer exits 2 (in about a second) when it isn't reachable,
+# and this function always returns 0 - a batch of drafts is the product, an image is a bonus.
+# This deliberately does NOT start ComfyUI: loading a 17 GB checkpoint from a background job on
+# a machine that may be asleep or busy is not something a scheduled run should decide to do.
+#
+# Only the top pick is rendered, one image at a time - the checkpoint needs ~20-24 GB of unified
+# memory. Every other option gets a "Render image" button in the app.
+#
+# Called AFTER notify() on purpose: the author hears about the drafts immediately, and the render
+# (~80 s warm) happens behind that. It takes the SAME `.rendering` lock the app's /api/render
+# route uses, so a scheduled render and a button click can never load the model twice at once.
+render_star_visual() {
+  [ -f "$CFG_ENGINE_DIR/render-visual.mjs" ] || return 0
+
+  # Resolve node under a minimal launchd/cron PATH, exactly as notify() resolves
+  # terminal-notifier: engine/schedule/crontab.example ships a PATH without /opt/homebrew/bin.
+  local node_bin
+  node_bin="$(command -v node 2>/dev/null)"
+  if [ -z "$node_bin" ]; then
+    for c in /opt/homebrew/bin/node /usr/local/bin/node; do
+      [ -x "$c" ] && { node_bin="$c"; break; }
+    done
+  fi
+  if [ -z "$node_bin" ]; then
+    echo "$(date '+%F %T') render: node not found on PATH, skipping" >> "$LOG"
+    return 0
+  fi
+
+  local pair n prompt
+  # One awk pass: inside the ⭐ option's block, take its number and its FIRST AI prompt.
+  pair="$(awk '
+    /^##/ {
+      instar = ($0 ~ /⭐/)
+      if (instar && match($0, /Option[ ]+[0-9]+/)) {
+        n = substr($0, RSTART, RLENGTH); sub(/Option[ ]+/, "", n)
+      }
+    }
+    instar && !found && /AI prompt:[ ]*"/ {
+      rest = substr($0, index($0, "AI prompt:"))
+      rest = substr(rest, index(rest, "\"") + 1)
+      q = index(rest, "\"")
+      if (q > 1 && n != "") { printf "%s\t%s\n", n, substr(rest, 1, q - 1); found = 1 }
+    }
+  ' "$draft")"
+
+  if [ -z "$pair" ]; then
+    echo "$(date '+%F %T') render: no ⭐ option with an AI prompt, skipping" >> "$LOG"
+    return 0
+  fi
+  n="${pair%%$'\t'*}"
+  prompt="${pair#*$'\t'}"
+
+  # Same lock file as the app's /api/render (drafts/.rendering). noclobber makes the create
+  # atomic, and a lock older than 15 minutes is a dead run - the same staleness window the app's
+  # runLock uses, so the two agree on when a lock may be taken over.
+  local lock="$BOOST_DIR/.rendering"
+  if [ -f "$lock" ] && [ -z "$(find "$lock" -mmin +15 2>/dev/null)" ]; then
+    echo "$(date '+%F %T') render: another render is in progress, skipping" >> "$LOG"
+    return 0
+  fi
+  rm -f "$lock"
+  if ! (set -o noclobber; echo "generate.sh $$" > "$lock") 2>/dev/null; then
+    echo "$(date '+%F %T') render: could not take the render lock, skipping" >> "$LOG"
+    return 0
+  fi
+
+  local rrc
+  {
+    echo "$(date '+%F %T') render: option $n of $stamp"
+    SHIPPOST_RENDER_PROMPT="$prompt" "$node_bin" "$CFG_ENGINE_DIR/render-visual.mjs" \
+      --draft "$stamp" --option "$n" --out-dir "$BOOST_DIR/.visuals" 2>&1
+    # Captured on its own line: the $(date) substitution in the echo below runs first and
+    # would reset $? to date's own status, logging every render as "exit 0".
+    rrc=$?
+    echo "$(date '+%F %T') render: exit $rrc (2 = ComfyUI not running, not an error)"
+  } >> "$LOG"
+  rm -f "$lock"
+  return 0
+}
+
 if [ "$rc" -eq 0 ] && [ -f "$draft" ]; then
   date +%s > "$LAST_RUN"
   write_result true "$rc"
@@ -162,6 +243,7 @@ if [ "$rc" -eq 0 ] && [ -f "$draft" ]; then
   msg="$(success_message)"
   echo "$(date '+%F %T') notify: $msg" >> "$LOG"
   notify "$msg" "Glass"
+  render_star_visual
 else
   exists="$([ -f "$draft" ] && echo yes || echo no)"
   # One entry per failure in its own file (the run log buries them under the engine's own
