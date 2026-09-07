@@ -36,6 +36,25 @@ export function acquireRunLock(lock: string): string | null {
   return tryCreate() ? token : null;
 }
 
+/**
+ * Refresh the lock's mtime, but only if we still own it. A run that legitimately outlives
+ * STALE_MS needs this, otherwise a second POST steals the lock and a SECOND ~20 GB checkpoint
+ * load starts alongside the first. /api/render can now spend up to 3 minutes starting ComfyUI
+ * BEFORE a render that is itself allowed 12 minutes, so the total genuinely can cross the 15
+ * minute window; heartbeating restores the intended meaning of "stale" (the run died) rather
+ * than shrinking the render budget to fit the clock.
+ */
+export function touchRunLock(lock: string, token: string): boolean {
+  try {
+    if (fs.readFileSync(lock, "utf8") !== token) return false;
+    const now = new Date();
+    fs.utimesSync(lock, now, now);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Release the lock only if we still own it (a staler run must not delete a newer run's lock). */
 export function releaseRunLock(lock: string, token: string): void {
   try {

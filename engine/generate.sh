@@ -160,6 +160,8 @@ success_message() {
 # and this function always returns 0 - a batch of drafts is the product, an image is a bonus.
 # This deliberately does NOT start ComfyUI: loading a 17 GB checkpoint from a background job on
 # a machine that may be asleep or busy is not something a scheduled run should decide to do.
+# The asymmetry is on purpose: the app's /api/render IS allowed to start it, because clicking
+# "Render image" is a human making that decision on a machine they are sitting at.
 #
 # Only the top pick is rendered, one image at a time - the checkpoint needs ~20-24 GB of unified
 # memory. Every other option gets a "Render image" button in the app.
@@ -209,15 +211,18 @@ render_star_visual() {
   prompt="${pair#*$'\t'}"
 
   # Same lock file as the app's /api/render (drafts/.rendering). noclobber makes the create
-  # atomic, and a lock older than 15 minutes is a dead run - the same staleness window the app's
-  # runLock uses, so the two agree on when a lock may be taken over.
-  local lock="$BOOST_DIR/.rendering"
+  # atomic, and a lock older than 15 minutes is treated as a dead run - the same staleness window
+  # the app's runLock uses. The app additionally refreshes the lock's mtime while it is alive
+  # (its run can span a 3 min engine start plus a 12 min render), so a fresh lock here always
+  # means a LIVE app render, never merely a long one.
+  local lock="$BOOST_DIR/.rendering" lock_token
+  lock_token="generate.sh $$"
   if [ -f "$lock" ] && [ -z "$(find "$lock" -mmin +15 2>/dev/null)" ]; then
     echo "$(date '+%F %T') render: another render is in progress, skipping" >> "$LOG"
     return 0
   fi
   rm -f "$lock"
-  if ! (set -o noclobber; echo "generate.sh $$" > "$lock") 2>/dev/null; then
+  if ! (set -o noclobber; echo "$lock_token" > "$lock") 2>/dev/null; then
     echo "$(date '+%F %T') render: could not take the render lock, skipping" >> "$LOG"
     return 0
   fi
@@ -232,7 +237,12 @@ render_star_visual() {
     rrc=$?
     echo "$(date '+%F %T') render: exit $rrc (2 = ComfyUI not running, not an error)"
   } >> "$LOG"
-  rm -f "$lock"
+  # Compare-and-delete, matching the app's releaseRunLock: if this render overran the staleness
+  # window the app may already have taken the lock over and started its own, and an unconditional
+  # rm would hand a third caller the go-ahead to load the checkpoint alongside it.
+  if [ "$(cat "$lock" 2>/dev/null)" = "$lock_token" ]; then
+    rm -f "$lock"
+  fi
   return 0
 }
 

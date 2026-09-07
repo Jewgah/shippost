@@ -37,10 +37,11 @@ const ROOT = resolve(HERE, '..');
 // port it was started with - so probe the one port the engine actually starts (8188), never a list.
 const BASE = process.env.SHIPPOST_COMFY_URL || 'http://127.0.0.1:8188';
 const POLL_MS = 2000;
-// Must stay UNDER app/lib/runLock.ts's STALE_MS (15 min): /api/render holds the `.rendering`
-// lock for the child's lifetime, and a lock older than STALE_MS is stealable - a longer render
-// than that would let a second POST start a second 20 GB model load. Measured cold render on
-// an M5 Pro: 77 s.
+// Sized against app/lib/runLock.ts's STALE_MS (15 min): a lock older than that is stealable, and
+// a second POST stealing it would start a second 20 GB model load. /api/render now heartbeats the
+// `.rendering` lock while it is alive, so ITS budget is no longer capped by this constant - but
+// engine/generate.sh takes the same lock and does NOT heartbeat, so this must stay under 15
+// minutes for the scheduled path. Measured cold render on an M5 Pro: 77 s.
 const TIMEOUT_MS = 12 * 60 * 1000;
 
 export const imagesFromHistory = (history, promptId) =>

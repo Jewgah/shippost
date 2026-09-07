@@ -61,14 +61,24 @@ flux-schnell checkpoint, each card gets a **Render image** button that turns tha
 1080x1350 PNG (LinkedIn's tallest in-feed size), and the top pick renders on its own at the end
 of a scheduled batch.
 
+The button starts ComfyUI itself when it isn't running (it says "Starting the image engine" while
+it does, which takes a minute or two the first time), so you only need this if you'd rather bring
+it up ahead of time:
+
 ```bash
 bash engine/comfy-headless.sh        # start ComfyUI on 127.0.0.1:8188 (no GUI, no browser)
 ```
 
-Nothing else changes if you skip this: with no ComfyUI running the button says so, the batch
-still generates, and the prompts are still there to paste into any image tool. The workflow
+A scheduled batch never starts it, on purpose: loading a 17 GB checkpoint at 09:13 on a machine
+that may be asleep or busy is a decision only a person clicking a button gets to make. So the top
+pick renders on its own only when ComfyUI already happens to be up.
+
+Nothing else changes if you skip all of this: with no ComfyUI installed the button says so, the
+batch still generates, and the prompts are still there to paste into any image tool. The workflow
 lives in `engine/workflows/linkedin-hero-flux.json` (edit `ckpt_name` if your checkpoint has a
-different name); `SHIPPOST_COMFY_DIR` and `SHIPPOST_COMFY_URL` override where it looks. Renders
+different name); `SHIPPOST_COMFY_DIR`, `SHIPPOST_COMFY_URL` and `SHIPPOST_COMFY_PORT` override
+where it looks, and a `SHIPPOST_COMFY_URL` on another machine is reported as unreachable rather
+than started, since the button can only start one here. Renders
 land in your drafts dir under `.visuals/`, and ComfyUI also keeps its own copy in its `output/`
 folder. Text in a generated image will be gibberish, that is what diffusion models do: keep
 words out of the prompt.

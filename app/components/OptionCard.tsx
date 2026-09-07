@@ -61,6 +61,10 @@ export default function OptionCard({
   const [rendered, setRendered] = useState(initiallyRendered);
   const [rendering, setRendering] = useState(false);
   const [renderErr, setRenderErr] = useState<string | null>(null);
+  // "starting" while the route brings ComfyUI up (it can take a minute or two on a cold model),
+  // "rendering" once the image itself is being made. Two minutes of bare spinner reads as hung.
+  const [renderPhase, setRenderPhase] = useState<"starting" | "rendering">("rendering");
+  const starting = rendering && renderPhase === "starting";
   // Bumped after each successful render so the <img> refetches instead of reusing the old bytes.
   const [renderNonce, setRenderNonce] = useState(0);
   const visualUrl = `/api/asset?which=visual&date=${encodeURIComponent(date)}&option=${option.n}${
@@ -85,6 +89,7 @@ export default function OptionCard({
     if (rendering || !renderPrompt) return;
     setRenderErr(null);
     setRendering(true);
+    setRenderPhase("rendering");
     try {
       const res = await fetch("/api/render", {
         method: "POST",
@@ -99,10 +104,15 @@ export default function OptionCard({
         );
         return;
       }
+      // The route probes ComfyUI before answering, so this first phase is already the true one.
+      if (j.phase === "starting" || j.phase === "rendering") setRenderPhase(j.phase);
       renderPollRef.current = setInterval(async () => {
         try {
           const s = await (await fetch("/api/render", { cache: "no-store" })).json();
-          if (s.running) return;
+          if (s.running) {
+            if (s.phase === "starting" || s.phase === "rendering") setRenderPhase(s.phase);
+            return;
+          }
           if (renderPollRef.current) clearInterval(renderPollRef.current);
           setRendering(false);
           if (s.lastResult?.ok) {
@@ -483,7 +493,7 @@ export default function OptionCard({
                         disabled={rendering}
                         className="cursor-pointer rounded text-muted transition duration-200 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:opacity-60"
                       >
-                        {rendering ? "Rendering…" : "Render again"}
+                        {starting ? "Starting the image engine…" : rendering ? "Rendering…" : "Render again"}
                       </button>
                     )}
                   </div>
@@ -508,9 +518,14 @@ export default function OptionCard({
                         strokeLinejoin="round"
                       />
                     </svg>
-                    {rendering ? "Rendering… ~1-2 min" : "Render image"}
+                    {starting ? "Starting the image engine…" : rendering ? "Rendering… ~1-2 min" : "Render image"}
                   </motion.button>
                 </div>
+              )}
+              {starting && (
+                <p aria-live="polite" className="mt-1.5 text-[11px] text-muted">
+                  Starting the image engine, this can take a minute. The image renders straight after.
+                </p>
               )}
               {renderErr && <p className="mt-1 text-xs text-red-400">{renderErr}</p>}
 
