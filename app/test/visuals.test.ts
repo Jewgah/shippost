@@ -137,3 +137,19 @@ describe("render-visual: errorFromHistory", () => {
     expect(errorFromHistory({}, "abc")).toBeNull(); // still queued - not an error
   });
 });
+
+describe("render-visual: outputFileName (--out-file)", () => {
+  it("keeps the per-option name by default and takes a bare png name for the queue's variants", async () => {
+    const { outputFileName } = await importRenderer();
+    expect(outputFileName("2026-09-06_145923", 2, null)).toBe("2026-09-06_145923-o2.png");
+    expect(outputFileName("2026-09-06_145923", 2, "")).toBe("2026-09-06_145923-o2.png");
+    expect(outputFileName("2026-09-06_145923", 2, "2026-09-06_145923-o2-a1b2c3-v3.png")).toBe("2026-09-06_145923-o2-a1b2c3-v3.png");
+  });
+
+  it("refuses a name that could leave the output dir or is not a png", async () => {
+    const { outputFileName } = await importRenderer();
+    for (const bad of ["../x.png", "a/b.png", "/etc/x.png", "..png", "x.jpg", ".png"]) {
+      expect(outputFileName("2026-09-06", 1, bad)).toBeNull();
+    }
+  });
+});

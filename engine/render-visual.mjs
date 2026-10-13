@@ -8,13 +8,15 @@
  *
  * Usage:
  *   node engine/render-visual.mjs --draft 2026-09-06_145923 --option 1 \
- *        [--prompt "…"] [--out-dir DIR] [--seed N]
+ *        [--prompt "…"] [--out-dir DIR] [--seed N] [--out-file NAME.png]
  *
  *   --prompt   also read from $SHIPPOST_RENDER_PROMPT
  *   --out-dir  also from $SHIPPOST_VISUALS_DIR, else <config output.draftsDir>/.visuals
  *   base URL   $SHIPPOST_COMFY_URL (default http://127.0.0.1:8188)
  *
- * Writes <out-dir>/<draftId>-o<N>.png at 1080x1350 (LinkedIn's tallest in-feed ratio).
+ *   --out-file a bare file name inside out-dir (engine/render-variants.mjs writes <job>-vN.png)
+ *
+ * Writes <out-dir>/<draftId>-o<N>.png (or --out-file) at 1080x1350 (LinkedIn's tallest in-feed ratio).
  *
  * Model notes (measured on this install, do not "optimize" away):
  *  - flux1-schnell wants 4 steps at cfg 1.0, euler/simple. The negative prompt is required by
@@ -93,6 +95,16 @@ const configuredVisualsDir = () => {
   }
 };
 
+/**
+ * The PNG's file name: `<draftId>-o<N>.png` by default, or `outFile` when given. `outFile` must be
+ * a bare `*.png` name (no directory part), so a caller can never write outside --out-dir with it.
+ * Returns null for an unusable name.
+ */
+export const outputFileName = (draftId, option, outFile) => {
+  if (outFile == null || outFile === '') return `${draftId}-o${option}.png`;
+  return /^[A-Za-z0-9_-][A-Za-z0-9_.-]*\.png$/.test(outFile) && !outFile.includes('..') ? outFile : null;
+};
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const probe = async () => {
@@ -116,7 +128,7 @@ const loadSharp = () => {
   }
 };
 
-export async function renderVisual({ draftId, option, prompt, outDir, seed }) {
+export async function renderVisual({ draftId, option, prompt, outDir, seed, outFile }) {
   // Fail on a missing resize dependency BEFORE burning a minute of GPU time on an image
   // we could not then size correctly.
   const sharp = loadSharp();
@@ -189,7 +201,7 @@ export async function renderVisual({ draftId, option, prompt, outDir, seed }) {
   );
 
   mkdirSync(outDir, { recursive: true });
-  const dest = join(outDir, `${draftId}-o${option}.png`);
+  const dest = join(outDir, outputFileName(draftId, option, outFile));
   const tmp = `${dest}.tmp`;
   // 1088x1360 in, 1080x1350 out. Written tmp-then-rename so a reader never sees a partial PNG.
   const resized = await sharp(bytes).resize(1080, 1350, { fit: 'cover' }).png().toBuffer();
@@ -229,6 +241,7 @@ if (isMain) {
   const outDir = flag(args, '--out-dir') ?? process.env.SHIPPOST_VISUALS_DIR ?? configuredVisualsDir();
   const seedArg = flag(args, '--seed');
   const seed = seedArg ? Number(seedArg) : Math.floor(Math.random() * 2 ** 31);
+  const outFile = flag(args, '--out-file');
 
   if (!draftId || !/^\d{4}-\d{2}-\d{2}(_\d{6})?$/.test(draftId)) {
     console.error('usage: render-visual.mjs --draft <YYYY-MM-DD[_HHMMSS]> --option <N> [--prompt "…"]');
@@ -242,5 +255,9 @@ if (isMain) {
     console.error('no prompt: pass --prompt or set SHIPPOST_RENDER_PROMPT');
     process.exit(1);
   }
-  process.exit(await renderVisual({ draftId, option, prompt, outDir: resolve(outDir), seed }));
+  if (outFile !== null && !outputFileName(draftId, option, outFile)) {
+    console.error('--out-file must be a bare file name ending in .png');
+    process.exit(1);
+  }
+  process.exit(await renderVisual({ draftId, option, prompt, outDir: resolve(outDir), seed, outFile }));
 }

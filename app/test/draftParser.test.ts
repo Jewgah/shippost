@@ -6,6 +6,7 @@ import {
   parseDraftMeta,
   parseVisualIdeas,
   removeOptionFromMarkdown,
+  variantPrompts,
 } from "@/lib/draftParser";
 
 const WELL_FORMED = `# LinkedIn drafts — 2026-05-31 · 5 options, ranked · pick ONE
@@ -571,5 +572,73 @@ _Why it works:_ x.
     const opt = parseDraft(md).options[0];
     expect(opt.companyPost).toBe("Mine.");
     expect(opt.companyPage).toBe("Ours.");
+  });
+});
+
+describe("variantPrompts (the 3 candidate images of a queued post)", () => {
+  const two = `1. A hook image - AI prompt: "first prompt, oil painting"
+2. The diff screenshot (screenshot - no AI)
+3. A second lane - AI prompt: "second prompt, isometric"`;
+  const one = `1. The diff screenshot (screenshot - no AI)
+2. A hook image - AI prompt: "only prompt"
+3. A whiteboard photo (no AI)`;
+
+  it("2 prompts give [p1, p2, p1] in idea order", () => {
+    expect(variantPrompts(two).map((v) => v.prompt)).toEqual(["first prompt, oil painting", "second prompt, isometric", "first prompt, oil painting"]);
+  });
+
+  it("1 prompt gives it three times, each with its own seed", () => {
+    const v = variantPrompts(one);
+    expect(v.map((x) => x.prompt)).toEqual(["only prompt", "only prompt", "only prompt"]);
+    expect(new Set(v.map((x) => x.seed)).size).toBe(3);
+  });
+
+  it("seeds are non-negative integers inside ComfyUI's 31-bit range, distinct for a shared prompt, for any salt", () => {
+    for (const salt of [0, 1, 123456789, 2 ** 32 - 1, -5]) {
+      const v = variantPrompts(two, salt);
+      for (const { seed } of v) {
+        expect(Number.isInteger(seed)).toBe(true);
+        expect(seed).toBeGreaterThanOrEqual(0);
+        expect(seed).toBeLessThan(2 ** 31);
+      }
+      expect(v[0].seed).not.toBe(v[2].seed);
+    }
+  });
+
+  it("is pure (same input, same output) and a different salt gives different seeds", () => {
+    expect(variantPrompts(two, 7)).toEqual(variantPrompts(two, 7));
+    expect(variantPrompts(two, 7)[0].seed).not.toBe(variantPrompts(two, 8)[0].seed);
+  });
+
+  it("caps at 3 when an option carries more prompts", () => {
+    const four = `1. a - AI prompt: "p1"\n2. b - AI prompt: "p2"\n3. c - AI prompt: "p3"\n4. d - AI prompt: "p4"`;
+    expect(variantPrompts(four).map((v) => v.prompt)).toEqual(["p1", "p2", "p3"]);
+  });
+
+  it("no AI prompt, or no visuals at all, gives []", () => {
+    expect(variantPrompts("1. The diff screenshot (screenshot - no AI)")).toEqual([]);
+    expect(variantPrompts("")).toEqual([]);
+  });
+});
+
+describe("personal-mode option with a B repost caption after A (written by Generate for company)", () => {
+  it("reads A, B and D apart", () => {
+    const md = `## Option 1 - lesson - commits that explain why   (8.7/10)
+**A. Company post**
+My personal post.
+
+**B. Repost caption (your profile)**
+Proud of this one.
+
+**D. Company page post**
+We write commits that explain why.
+
+_Why it works:_ concrete.
+`;
+    const opt = parseDraft(md).options[0];
+    expect(opt.companyPost).toBe("My personal post.");
+    expect(opt.repostCaption).toBe("Proud of this one.");
+    expect(opt.companyPage).toBe("We write commits that explain why.");
+    expect(opt.why).toBe("concrete.");
   });
 });

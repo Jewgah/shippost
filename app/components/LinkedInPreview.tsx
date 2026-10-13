@@ -22,6 +22,7 @@ export default function LinkedInPreview({
   companyMode = true,
   authorName = "",
   hasAvatar = false,
+  imageSrc = null,
 }: {
   companyPost: string;
   brandName: string;
@@ -29,6 +30,8 @@ export default function LinkedInPreview({
   companyMode?: boolean;
   authorName?: string;
   hasAvatar?: boolean;
+  /** An attached image, shown under the text the way the feed shows it. */
+  imageSrc?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const lines = companyPost.split("\n");
@@ -65,6 +68,10 @@ export default function LinkedInPreview({
           </button>
         )}
       </div>
+      {imageSrc && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imageSrc} alt="Attached image" className="block w-full border-t border-black/10" />
+      )}
       <div className="flex items-center justify-around border-t border-black/10 py-1 text-[12px] font-medium text-[#666]">
         <span>👍 Like</span>
         <span>💬 Comment</span>

@@ -43,6 +43,17 @@ export default function TopBar({ brandName }: { brandName: string }) {
         </Link>
         <div className="flex items-center gap-3">
           <Link
+            href="/queue"
+            aria-label="LinkedIn post queue"
+            title="LinkedIn post queue"
+            className="text-muted transition hover:text-accent"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M17 16l3 2-3 2v-4z" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+            </svg>
+          </Link>
+          <Link
             href="/settings"
             aria-label="Settings"
             title="Settings"

@@ -6,6 +6,7 @@ import { firstRenderablePrompt, type DraftOption } from "@/lib/draftParser";
 import { StarBadge, ScoreBadge, PillarTag } from "./badges";
 import ABSection from "./ABSection";
 import LinkedInPreview from "./LinkedInPreview";
+import LinkedInPostPanel from "./LinkedInPostPanel";
 
 export default function OptionCard({
   option,
@@ -20,6 +21,7 @@ export default function OptionCard({
   initiallyRejected = false,
   initiallyRendered = false,
   hasCarousel = false,
+  hasCompanyPage = false,
 }: {
   option: DraftOption;
   date: string;
@@ -35,7 +37,10 @@ export default function OptionCard({
   initiallyRendered?: boolean;
   /** True when a carousel PDF for this option already exists on disk (built by the CLI). */
   hasCarousel?: boolean;
+  /** brand.linkedinPageUrl is configured, so the queue panel can target the company page. */
+  hasCompanyPage?: boolean;
 }) {
+  const [queueing, setQueueing] = useState(false);
   const [posted, setPosted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [postErr, setPostErr] = useState<string | null>(null);
@@ -281,7 +286,7 @@ export default function OptionCard({
         {option.star && <StarBadge />}
         <PillarTag pillar={option.pillar} />
         <span className="text-sm font-semibold text-fg">{option.topic}</span>
-        <span className="ml-auto flex items-center gap-2">
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <ScoreBadge score={option.score} />
           {option.parsed && (
             <button
@@ -305,6 +310,15 @@ export default function OptionCard({
               className="inline-flex items-center gap-1 rounded-md border border-border bg-elevated px-2 py-0.5 text-xs text-fg transition hover:border-accent hover:text-accent disabled:opacity-50"
             >
               {editRunning && companyRun ? "Generating…" : option.companyPage ? "Regenerate for company" : "Generate for company"}
+            </button>
+          )}
+          {option.parsed && (
+            <button
+              onClick={() => setQueueing((v) => !v)}
+              aria-expanded={queueing}
+              className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-2 py-0.5 text-xs text-fg transition hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              Add to queue
             </button>
           )}
           <button
@@ -368,6 +382,16 @@ export default function OptionCard({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {queueing && option.parsed && (
+        <LinkedInPostPanel
+          option={option}
+          date={date}
+          companyMode={companyMode}
+          brandName={brandName}
+          hasCompanyPage={hasCompanyPage}
+        />
+      )}
 
       {companyRun && !editing && (editRunning || editErr) && (
         <p className={`mb-2 text-xs ${editErr ? "text-red-400" : "text-muted"}`}>
@@ -454,8 +478,13 @@ export default function OptionCard({
           {!companyMode && option.companyPage && (
             <ABSection label="Company" hint={`company page post - paste on ${brandName || "your page"}`} text={option.companyPage} limit={3000} />
           )}
-          {companyMode && option.repostCaption && (
-            <ABSection label="B" hint="repost caption — your profile" text={option.repostCaption} limit={3000} />
+          {option.repostCaption && (
+            <ABSection
+              label="B"
+              hint={companyMode ? "repost caption - your profile" : `repost caption - your profile, when ${brandName || "the company page"} posts it`}
+              text={option.repostCaption}
+              limit={3000}
+            />
           )}
           {/* Belt for older drafts / model slips: a "(no link — …)" placeholder is a note
               to the author, not something to paste as a comment. */}

@@ -234,6 +234,42 @@ export function firstRenderablePrompt(visual: string): string | null {
   return parseVisualIdeas(visual).find((v) => v.prompt)?.prompt ?? null;
 }
 
+/** How many candidate images a queued post gets. */
+export const VARIANT_COUNT = 3;
+
+// FNV-1a, 32 bit: a stable number from a prompt, so a seed is reproducible from its inputs.
+function hash32(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
+}
+
+/**
+ * The renders behind a queued post's 3 candidate images: every AI prompt in idea order (idea 1
+ * is the star slot, so best first), then extra seeds of the FIRST prompt until there are 3.
+ * Options carry 1 to 2 AI prompts in practice (the third idea is usually a screenshot), so 2
+ * prompts give [p1, p2, p1] and 1 gives [p1, p1, p1]. No AI prompt gives [] (a text-only post).
+ *
+ * Pure: the seed is derived from the prompt, the variant's position and `salt`, never from
+ * Math.random, so a test can pin it. Entries sharing a prompt sit at different positions and so
+ * get different seeds; the caller passes a per-item `salt` so re-queueing the same option does
+ * not re-render the identical three images.
+ */
+export function variantPrompts(visual: string, salt = 0): { prompt: string; seed: number }[] {
+  const prompts = parseVisualIdeas(visual)
+    .map((v) => v.prompt)
+    .filter((p): p is string => Boolean(p))
+    .slice(0, VARIANT_COUNT);
+  if (!prompts.length) return [];
+  while (prompts.length < VARIANT_COUNT) prompts.push(prompts[0]);
+  const base = (hash32(prompts[0]) + (Math.abs(Math.trunc(salt)) % 2 ** 30)) % 2 ** 30;
+  // base < 2^30 and the step keeps every position distinct and inside ComfyUI's 31-bit seed range.
+  return prompts.map((prompt, i) => ({ prompt, seed: base + i * 1_000_003 }));
+}
+
 interface RawBlock {
   header: string;
   body: string[];

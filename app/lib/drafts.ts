@@ -189,6 +189,8 @@ export interface Status {
   hasLogo: boolean;
   hasAvatar: boolean;
   companyMode: boolean;
+  /** brand.linkedinPageUrl is set, so "Post to LinkedIn" can target the company page. */
+  hasCompanyPage: boolean;
   recentPostCount: number;
 }
 
@@ -210,6 +212,7 @@ export function getStatus(): Status {
     hasLogo: Boolean(effectiveLogoPath()),
     hasAvatar: Boolean(uploadedAvatarPath()),
     companyMode: readSettings().companyMode,
+    hasCompanyPage: Boolean(c.brand.linkedinPageUrl),
     recentPostCount: recentPostCount(),
   };
 }

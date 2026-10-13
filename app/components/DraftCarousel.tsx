@@ -17,6 +17,7 @@ export default function DraftCarousel({
   rejectedOptions = [],
   renderedOptions = [],
   builtCarousels = [],
+  hasCompanyPage = false,
 }: {
   options: DraftOption[];
   date: string;
@@ -29,6 +30,7 @@ export default function DraftCarousel({
   renderedOptions?: number[];
   /** Option numbers whose carousel PDF already exists on disk. */
   builtCarousels?: number[];
+  hasCompanyPage?: boolean;
 }) {
   const reduce = useReducedMotion();
   const railRef = useRef<HTMLDivElement>(null);
@@ -131,6 +133,7 @@ export default function DraftCarousel({
                 initiallyRejected={rejectedOptions.includes(o.n)}
                 initiallyRendered={renderedOptions.includes(o.n)}
                 hasCarousel={builtCarousels.includes(o.n)}
+                hasCompanyPage={hasCompanyPage}
               />
             </div>
           ))}

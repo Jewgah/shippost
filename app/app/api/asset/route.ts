@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadConfig } from "@/lib/config";
 import { isDraftId } from "@/lib/draftId";
 import { effectiveLogoPath, uploadedAvatarPath } from "@/lib/settings";
+import { isQueueId, variantImagePath } from "@/lib/linkedinQueue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ function optionAssetPath(date: string | null, option: string | null, ext: "png" 
 }
 
 // Streams the brand logo (uploaded one wins over config), the author avatar, a rendered
-// option visual, or a built carousel PDF. Only these known assets - never an arbitrary path.
+// option visual, a built carousel PDF, or a queued post's candidate image. Only these known assets - never an arbitrary path.
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const which = params.get("which");
@@ -44,6 +45,13 @@ export async function GET(req: Request) {
   else if (which === "visual" || which === "carousel") {
     file = optionAssetPath(params.get("date"), params.get("option"), which === "visual" ? "png" : "pdf");
     if (!file) return NextResponse.json({ error: "invalid draft id or option" }, { status: 400 });
+  } else if (which === "queue") {
+    // A queued post's candidate image: built from a validated queue id and an integer 1-3.
+    const id = params.get("id");
+    const v = Number(params.get("v"));
+    if (!isQueueId(id) || !Number.isInteger(v) || v < 1 || v > 3)
+      return NextResponse.json({ error: "invalid queue id or image" }, { status: 400 });
+    file = variantImagePath(id, v);
   } else return NextResponse.json({ error: "unknown asset" }, { status: 400 });
 
   if (!file || !fs.existsSync(file)) {

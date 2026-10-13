@@ -33,13 +33,15 @@ Rules:
 - Scrub rules still apply: never name clients ($CFG_SCRUB_LIST), never the day job, no secrets/tokens/internal URLs.
 Make the edit and save the file in place. Do not ask any questions — make the best editorial choice."
 
-# "Generate for company": add/replace a section D with a company-page version of a personal post.
+# "Generate for company": add/replace a section D with a company-page version of a personal post,
+# plus a section B repost caption when the option has none (the queue's company mode reposts with it).
 if [ "${SHIPPOST_EDIT_MODE:-}" = "company" ]; then
   PROMPT="Add a company-page version to ONE option in an existing draft. The file is at this exact path: $file
 In 'Option $opt', section '**A. Company post**' is a first-person post for the author's own profile. Write the version of that post for the company page of $CFG_BRAND_NAME${CFG_BRAND_TAGLINE:+ ($CFG_BRAND_TAGLINE)}${CFG_BRAND_VIBE:+, vibe: $CFG_BRAND_VIBE}: same story and facts, in the company page's voice (plural 'we' is fine there), lighter and brand-safe, LinkedIn format, under 3000 characters.
 Rules:
 - Put it in a section headed exactly '**D. Company page post**', placed right before Option $opt's '_Why it works:_' line. If a section D already exists in Option $opt, replace its content.
-- Change NOTHING else: not section A, B or C, not the header line, not any other option, not the title or footer.
+- If Option $opt has no section headed '**B. Repost caption (your profile)**', also add one right after section A (before any '**C. First comment**'): one to three short first-person lines the author posts on their own profile when resharing the company page post. Never invent a fact that is not in section A. If section B already exists, leave it exactly as it is.
+- Change NOTHING else: not section A, an existing B, or C, not the header line, not any other option, not the title or footer.
 - No em dashes, no arrows. Language: $CFG_LANGUAGE.
 - Scrub rules still apply: never name clients ($CFG_SCRUB_LIST), never the day job, no secrets/tokens/internal URLs.
 Save the file in place. Do not ask any questions."
