@@ -33,6 +33,9 @@ export default function DraftCarousel({
   const reduce = useReducedMotion();
   const railRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
+  // Deep link: ?option=N opens on option N (its number, not its position, so it survives deletes).
+  // The URL is only rewritten once the rail has scrolled, so a fresh load never clobbers ?option.
+  const linked = useRef(false);
   // After an option is deleted the list shrinks; `active` may briefly point past the end until the
   // next scroll recomputes it. Clamp for the counter and arrow-disabled states.
   const lastIndex = Math.max(0, options.length - 1);
@@ -65,6 +68,7 @@ export default function DraftCarousel({
         best = i;
       }
     }
+    linked.current = true;
     setActive(best);
   }, []);
 
@@ -76,6 +80,25 @@ export default function DraftCarousel({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [active, scrollToIndex]);
+
+  useEffect(() => {
+    const n = Number(new URLSearchParams(window.location.search).get("option"));
+    const i = options.findIndex((o) => o.n === n);
+    const rail = railRef.current;
+    const child = rail?.children[i] as HTMLElement | undefined;
+    if (rail && child) rail.scrollTo({ left: child.offsetLeft - rail.offsetLeft });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the URL on the visible option so it can be copied or reloaded.
+  useEffect(() => {
+    const n = options[safeActive]?.n;
+    if (!linked.current || !n) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("option") === String(n)) return;
+    url.searchParams.set("option", String(n));
+    window.history.replaceState(window.history.state, "", url);
+  }, [safeActive, options]);
 
   return (
     <div className="relative">
