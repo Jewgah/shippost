@@ -536,3 +536,40 @@ describe("parseVisualIdeas - reads the visuals off a parsed draft option", () =>
     expect(firstRenderablePrompt(opt.visual)).toBe("candid, natural light, 35mm, subtle grain");
   });
 });
+
+describe("section D (company page post)", () => {
+  it("is read on its own and never leaks into A or C", () => {
+    const md = `## Option 1 — lesson — commits that explain why   (8.7/10)
+**A. Company post**
+My personal post.
+
+**C. First comment**
+https://example.test
+
+**D. Company page post**
+We write commits that explain why.
+
+_Why it works:_ concrete.
+_Suggested visuals:_
+1. a diagram
+`;
+    const opt = parseDraft(md).options[0];
+    expect(opt.companyPost).toBe("My personal post.");
+    expect(opt.firstComment).toBe("https://example.test");
+    expect(opt.companyPage).toBe("We write commits that explain why.");
+  });
+  it("tolerates a slipped D header", () => {
+    const md = `## Option 1 — lesson — topic   (8/10)
+**A. Company post**
+Mine.
+
+**D - Company page post**
+Ours.
+
+_Why it works:_ x.
+`;
+    const opt = parseDraft(md).options[0];
+    expect(opt.companyPost).toBe("Mine.");
+    expect(opt.companyPage).toBe("Ours.");
+  });
+});

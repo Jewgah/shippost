@@ -26,7 +26,9 @@ export async function POST(req: Request) {
   }
   const date = typeof body.date === "string" ? body.date : "";
   const option = Number(body.option);
-  const prompt = cleanField(body.prompt, 800);
+  // "Generate for company": a fixed rewrite (section D) instead of a free-form instruction.
+  const company = body.company === true;
+  const prompt = company ? "company" : cleanField(body.prompt, 800);
 
   if (!isDraftId(date)) return NextResponse.json({ error: "invalid draft id" }, { status: 400 });
   if (!Number.isInteger(option) || option < 1 || option > 20)
@@ -50,6 +52,7 @@ export async function POST(req: Request) {
       SHIPPOST_EDIT_FILE: file,
       SHIPPOST_EDIT_OPTION: String(option),
       SHIPPOST_EDIT_PROMPT: prompt,
+      SHIPPOST_EDIT_MODE: company ? "company" : "",
     },
     stdio: "ignore",
   });

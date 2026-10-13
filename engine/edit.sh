@@ -33,6 +33,18 @@ Rules:
 - Scrub rules still apply: never name clients ($CFG_SCRUB_LIST), never the day job, no secrets/tokens/internal URLs.
 Make the edit and save the file in place. Do not ask any questions — make the best editorial choice."
 
+# "Generate for company": add/replace a section D with a company-page version of a personal post.
+if [ "${SHIPPOST_EDIT_MODE:-}" = "company" ]; then
+  PROMPT="Add a company-page version to ONE option in an existing draft. The file is at this exact path: $file
+In 'Option $opt', section '**A. Company post**' is a first-person post for the author's own profile. Write the version of that post for the company page of $CFG_BRAND_NAME${CFG_BRAND_TAGLINE:+ ($CFG_BRAND_TAGLINE)}${CFG_BRAND_VIBE:+, vibe: $CFG_BRAND_VIBE}: same story and facts, in the company page's voice (plural 'we' is fine there), lighter and brand-safe, LinkedIn format, under 3000 characters.
+Rules:
+- Put it in a section headed exactly '**D. Company page post**', placed right before Option $opt's '_Why it works:_' line. If a section D already exists in Option $opt, replace its content.
+- Change NOTHING else: not section A, B or C, not the header line, not any other option, not the title or footer.
+- No em dashes, no arrows. Language: $CFG_LANGUAGE.
+- Scrub rules still apply: never name clients ($CFG_SCRUB_LIST), never the day job, no secrets/tokens/internal URLs.
+Save the file in place. Do not ask any questions."
+fi
+
 # shellcheck disable=SC2086 # CFG_ALLOWED_TOOLS is a deliberate space-separated arg list
 "$CFG_CLAUDE_BIN" -p "$PROMPT" \
   --allowed-tools $CFG_ALLOWED_TOOLS \

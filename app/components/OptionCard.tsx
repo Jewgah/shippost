@@ -50,6 +50,7 @@ export default function OptionCard({
   const [editPrompt, setEditPrompt] = useState("");
   const [editRunning, setEditRunning] = useState(false);
   const [editErr, setEditErr] = useState<string | null>(null);
+  const [companyRun, setCompanyRun] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
@@ -132,16 +133,18 @@ export default function OptionCard({
     }
   };
 
-  const applyEdit = async () => {
+  // company=true: "Generate for company" (writes section D) instead of a free-form edit.
+  const applyEdit = async (company = false) => {
     const p = editPrompt.trim();
-    if (!p || editRunning) return;
+    if ((!p && !company) || editRunning) return;
     setEditErr(null);
     setEditRunning(true);
+    setCompanyRun(company);
     try {
       const res = await fetch("/api/edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, option: option.n, prompt: p }),
+        body: JSON.stringify(company ? { date, option: option.n, company } : { date, option: option.n, prompt: p }),
       });
       const j = await res.json();
       if (!res.ok || j.started === false) {
@@ -294,6 +297,16 @@ export default function OptionCard({
               Edit with AI
             </button>
           )}
+          {option.parsed && !companyMode && brandName && (
+            <button
+              onClick={() => applyEdit(true)}
+              disabled={editRunning}
+              title={`Write a version of this post for the ${brandName} company page`}
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-elevated px-2 py-0.5 text-xs text-fg transition hover:border-accent hover:text-accent disabled:opacity-50"
+            >
+              {editRunning && companyRun ? "Generating…" : option.companyPage ? "Regenerate for company" : "Generate for company"}
+            </button>
+          )}
           <button
             onClick={() => {
               setConfirmingDelete((v) => !v);
@@ -356,6 +369,12 @@ export default function OptionCard({
         )}
       </AnimatePresence>
 
+      {companyRun && !editing && (editRunning || editErr) && (
+        <p className={`mb-2 text-xs ${editErr ? "text-red-400" : "text-muted"}`}>
+          {editErr || `Writing the ${brandName} company page version…`}
+        </p>
+      )}
+
       <AnimatePresence initial={false}>
         {editing && (
           <motion.div
@@ -388,7 +407,7 @@ export default function OptionCard({
                   Cancel
                 </button>
                 <motion.button
-                  onClick={applyEdit}
+                  onClick={() => applyEdit()}
                   disabled={editRunning || !editPrompt.trim()}
                   whileTap={reduce || editRunning ? undefined : { scale: 0.96 }}
                   className="rounded-md px-3 py-1 text-xs font-semibold text-[#06210f] transition disabled:opacity-50"
@@ -432,6 +451,9 @@ export default function OptionCard({
             text={option.companyPost}
             limit={3000}
           />
+          {!companyMode && option.companyPage && (
+            <ABSection label="Company" hint={`company page post - paste on ${brandName || "your page"}`} text={option.companyPage} limit={3000} />
+          )}
           {companyMode && option.repostCaption && (
             <ABSection label="B" hint="repost caption — your profile" text={option.repostCaption} limit={3000} />
           )}

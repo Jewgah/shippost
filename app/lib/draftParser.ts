@@ -11,6 +11,8 @@ export interface DraftOption {
   companyPost: string;
   repostCaption: string;
   firstComment: string;
+  /** Section D: a company-page version of a personal-mode option, made on demand ("Generate for company"). */
+  companyPage: string;
   why: string;
   visual: string;
   raw: string;
@@ -113,15 +115,17 @@ function assignNumbers(headers: DraftOptionMeta[]): number[] {
 // "**C: First comment**") — if a slip weren't matched, the link block would be swept into the
 // repost caption the user copies.
 const C_HEADER = `\\*\\*C\\b\\W{0,3}First comment[^\\n]*\\*\\*`;
+// Same slip tolerance as C: section D is model-written too.
+const D_HEADER = `\\*\\*D\\b\\W{0,3}Company page post[^\\n]*\\*\\*`;
 // End of the A section: the B header normally — but in personal-only mode the engine omits B
 // entirely, so also stop at C / the why-line / the visuals block. Without these fallbacks the
 // pasteable post would swallow everything to the end of the option.
 const A_END_RE = new RegExp(
-  `\\*\\*B\\.\\s*Repost caption[^\\n]*\\*\\*|${C_HEADER}|^_(Why it works|Suggested visuals?):_`,
+  `\\*\\*B\\.\\s*Repost caption[^\\n]*\\*\\*|${C_HEADER}|${D_HEADER}|^_(Why it works|Suggested visuals?):_`,
   "im"
 );
 // End of the B section: the C section when present, else the why-line (pre-C drafts).
-const B_END_RE = new RegExp(`${C_HEADER}|^_Why it works:_`, "im");
+const B_END_RE = new RegExp(`${C_HEADER}|${D_HEADER}|^_Why it works:_`, "im");
 const C_START_RE = new RegExp(C_HEADER, "i");
 
 function parseOptionBlock(headerLine: string, body: string[], n: number): DraftOption {
@@ -139,13 +143,16 @@ function parseOptionBlock(headerLine: string, body: string[], n: number): DraftO
   // Not humanized: it's a URL (or a soft-CTA note), never published prose. Ends at the
   // why-line, or at the visuals block if a slipped generation omitted the why-line — the
   // visuals must never be swallowed into what the user pastes as a comment.
-  const firstComment = extractBetween(text, C_START_RE, /^_(Why it works|Suggested visuals?):_/im);
+  const firstComment = extractBetween(text, C_START_RE, new RegExp(`${D_HEADER}|^_(Why it works|Suggested visuals?):_`, "im"));
+  const companyPage = humanizeText(
+    extractBetween(text, new RegExp(D_HEADER, "i"), /^_(Why it works|Suggested visuals?):_/im)
+  );
   const why = extractLine(text, /^_Why it works:_\s*(.*)$/im);
   const visual = extractVisuals(text);
 
   const parsed = h.parsedHeader && companyPost.length > 0;
 
-  return { n, star: h.star, pillar: h.pillar, topic: h.topic, score: h.score, companyPost, repostCaption, firstComment, why, visual, raw, parsed };
+  return { n, star: h.star, pillar: h.pillar, topic: h.topic, score: h.score, companyPost, repostCaption, firstComment, companyPage, why, visual, raw, parsed };
 }
 
 function stripTrailingRule(s: string): string {
