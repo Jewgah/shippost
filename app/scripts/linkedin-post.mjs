@@ -379,6 +379,21 @@ async function commentOn(page, urn, text, asPage, label) {
  * its button is "Repost". Returns the repost's own urn (null if it could not be confirmed).
  * Dry run (urn = null): rehearses on the latest page post and stops before the final click.
  */
+/**
+ * Click an element LinkedIn keeps re-rendering: a card with a playing video redraws its action
+ * bar and menu every tick, so Playwright's "stable" wait never ends (measured 2026-10-19: "Repost
+ * with thoughts" detached for 30 s). After a short try, the mouse is aimed at where it is instead.
+ */
+async function clickUnstable(page, locator) {
+  try {
+    await locator.click({ timeout: 5_000 });
+  } catch {
+    const box = await locator.boundingBox();
+    if (!box) throw new Error(`${locator} is not on screen`);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  }
+}
+
 async function repost(page, job, urn) {
   if (!urn) urn = await findUrn(page, new URL('admin/dashboard/', PAGE_URL).href, null, 1);
   if (!urn) throw new Error('found no page post to repost');
@@ -387,8 +402,8 @@ async function repost(page, job, urn) {
   await page.goto(`https://www.linkedin.com/feed/update/${urn}/`);
   await dismissPopups(page);
   await actAs(page, null); // the repost is the member's, whatever identity was last used on this post
-  await page.getByRole('button', { name: /^repost$/i }).first().click();
-  await page.getByText(/^repost with (your )?thoughts$/i).first().click();
+  await clickUnstable(page, page.getByRole('button', { name: /^repost$/i }).first());
+  await clickUnstable(page, page.getByText(/^repost with (your )?thoughts$/i).first());
   const editor = page.locator('[contenteditable="true"]').filter({ visible: true }).last();
   await editor.waitFor({ timeout: 15_000 });
   await pasteInto(editor, job.repost);
@@ -404,6 +419,65 @@ async function repost(page, job, urn) {
   await go.click();
   await page.waitForTimeout(3000);
   return confirmPublished(page, job.repost, MY_ACTIVITY, before);
+}
+
+/**
+ * The follow-ups of a posted item: the repost, the first comment (as the page in company mode),
+ * the comment on the repost. Each runs even when another failed (the page comment does not need
+ * the repost), and each is skipped when the item already records it done, so `--followups <id>`
+ * can finish an item whose run stopped halfway. Returns the failures, step by step.
+ */
+async function followUps(page, job, urn) {
+  const company = job.mode === 'company';
+  const failures = [];
+  const step = async (what, fn) => {
+    try {
+      await fn();
+    } catch (e) {
+      failures.push(`${what}: ${(e && e.message) || e}`);
+      log(`job ${job.id}: ${what} failed: ${(e && e.message) || e}`);
+    }
+  };
+  const wantRepost = company && Boolean(job.repost?.trim());
+  let repostUrn = job.repostUrn ?? null;
+  if (wantRepost && !job.reposted)
+    await step('repost', async () => {
+      repostUrn = await repost(page, job, urn);
+      saveJob({ ...readJob(job.id), reposted: true, repostUrn });
+      log(`job ${job.id}: reposted${repostUrn ? ` ${repostUrn}` : ' (not confirmed)'}`);
+    });
+  if (job.comment?.trim()) {
+    if (!job.commented)
+      await step(company ? 'comment on the page post' : 'first comment', async () => {
+        await commentOn(page, urn, job.comment, company ? BRAND_NAME : null, job.id);
+        saveJob({ ...readJob(job.id), commented: true });
+        log(`job ${job.id}: first comment posted${company ? ` as ${BRAND_NAME}` : ''}`);
+      });
+    if (wantRepost && !job.repostCommented)
+      await step('comment on the repost', async () => {
+        if (!repostUrn) throw new Error('the repost was not found on your profile, so it was not commented: add the comment by hand');
+        await commentOn(page, repostUrn, job.comment, null, job.id);
+        saveJob({ ...readJob(job.id), repostCommented: true });
+        log(`job ${job.id}: comment posted on the repost`);
+      });
+  }
+  return failures;
+}
+
+/** `--followups <id>`: only the follow-ups still missing on a posted item. Never posts again. */
+async function finishJob(ctx, job) {
+  const done = ['reposted', 'commented', 'repostCommented'].filter((k) => job[k]);
+  log(`job ${job.id}: follow-ups only (already done: ${done.join(', ') || 'none'})`);
+  const page = ctx.pages()[0] ?? (await ctx.newPage());
+  try {
+    const failures = await followUps(page, job, job.urn);
+    saveJob({ ...readJob(job.id), error: failures.length ? failures.join(' | ') : undefined });
+    if (failures.length) throw new Error(failures.join(' | '));
+    log(`job ${job.id}: done`);
+  } catch (e) {
+    await page.screenshot({ path: join(JOBS_DIR, `${job.id}.error.png`) }).catch(() => {});
+    throw e;
+  }
 }
 
 async function runJob(ctx, job) {
@@ -449,38 +523,7 @@ async function runJob(ctx, job) {
     // that posts twice. Each follow-up records its own flag, so the item shows what got done.
     saveJob({ ...readJob(job.id), status: 'posted', postedAt: new Date().toISOString(), urn });
     log(`job ${job.id}: posted ${urn}`);
-    // Each follow-up runs even when another failed (the page comment does not need the repost).
-    // Failures are collected and recorded on the item at the end, step by step.
-    const failures = [];
-    const step = async (what, fn) => {
-      try {
-        await fn();
-      } catch (e) {
-        failures.push(`${what}: ${(e && e.message) || e}`);
-        log(`job ${job.id}: ${what} failed: ${(e && e.message) || e}`);
-      }
-    };
-    let repostUrn = null;
-    if (company && job.repost?.trim())
-      await step('repost', async () => {
-        repostUrn = await repost(page, job, urn);
-        saveJob({ ...readJob(job.id), reposted: true, repostUrn });
-        log(`job ${job.id}: reposted${repostUrn ? ` ${repostUrn}` : ' (not confirmed)'}`);
-      });
-    if (job.comment?.trim()) {
-      await step(company ? 'comment on the page post' : 'first comment', async () => {
-        await commentOn(page, urn, job.comment, company ? BRAND_NAME : null, job.id);
-        saveJob({ ...readJob(job.id), commented: true });
-        log(`job ${job.id}: first comment posted${company ? ` as ${BRAND_NAME}` : ''}`);
-      });
-      if (company && job.repost?.trim())
-        await step('comment on the repost', async () => {
-          if (!repostUrn) throw new Error('the repost was not found on your profile, so it was not commented: add the comment by hand');
-          await commentOn(page, repostUrn, job.comment, null, job.id);
-          saveJob({ ...readJob(job.id), repostCommented: true });
-          log(`job ${job.id}: comment posted on the repost`);
-        });
-    }
+    const failures = await followUps(page, readJob(job.id), urn);
     if (failures.length) throw new Error(failures.join(' | '));
     log(`job ${job.id}: done`);
   } catch (e) {
@@ -513,9 +556,10 @@ async function main() {
     return;
   }
 
-  const id = flag('--job');
+  const followOnly = args.includes('--followups');
+  const id = flag(followOnly ? '--followups' : '--job');
   if (!id || !/^[\w-]+$/.test(id) || !existsSync(jobPath(id))) {
-    console.error(id ? `no such queue item: ${id}` : 'usage: linkedin-post.mjs --login | --job <id> [--dry-run]');
+    console.error(id ? `no such queue item: ${id}` : 'usage: linkedin-post.mjs --login | --job <id> [--dry-run] | --followups <id>');
     return process.exit(1);
   }
   // Lock BEFORE reading the item: two runs must never both see it "queued".
@@ -524,7 +568,12 @@ async function main() {
     return process.exit(3);
   }
   const job = readJob(id);
-  if (job.status !== 'queued' && !dryRun) {
+  if (followOnly && (job.status !== 'posted' || !job.urn)) {
+    log(`item ${id} is ${job.status}${job.urn ? '' : ' with no post urn'}: nothing to follow up`);
+    unlock();
+    return process.exit(1);
+  }
+  if (job.status !== 'queued' && !dryRun && !followOnly) {
     log(`item ${id} is ${job.status}, not queued: not posting it again`);
     unlock();
     return process.exit(1);
@@ -533,7 +582,8 @@ async function main() {
   const ctx = await openBrowser();
   let failed = false;
   try {
-    await runJob(ctx, job);
+    if (followOnly) await finishJob(ctx, job);
+    else await runJob(ctx, job);
   } catch (e) {
     failed = true;
     log(`item ${id} failed: ${(e && e.message) || e}`);
