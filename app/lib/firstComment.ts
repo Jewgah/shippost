@@ -5,6 +5,17 @@ export interface CommentLinks {
   siteUrl: string;
   /** brand.landingUrl: the Infinify AI diagnostic offer. */
   landingUrl: string;
+  /** brand.companyUrl: the company's own site (hakolkal.com), for the page's comment. */
+  companyUrl?: string;
+}
+
+/**
+ * The comment the company page leaves on its own post (Jordan, 2026-10-19): the page's voice, never
+ * first person, and the company's site, never the author's. Empty when no company site is set.
+ */
+export function defaultPageComment(links: CommentLinks): string {
+  const url = (links.companyUrl ?? "").trim();
+  return url ? `More of what we build: ${url}` : "";
 }
 
 /**

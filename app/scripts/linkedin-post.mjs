@@ -458,13 +458,15 @@ async function followUps(page, job, urn) {
       saveJob({ ...readJob(job.id), reposted: true, repostUrn });
       log(`job ${job.id}: reposted${repostUrn ? ` ${repostUrn}` : ' (not confirmed)'}`);
     });
+  // On the post: the page's own comment in company mode (its voice, its site), else the author's.
+  const onPost = company ? job.pageComment : job.comment;
+  if (onPost?.trim() && !job.commented)
+    await step(company ? 'comment on the page post' : 'first comment', async () => {
+      await commentOn(page, urn, onPost, company ? BRAND_NAME : null, job.id);
+      saveJob({ ...readJob(job.id), commented: true });
+      log(`job ${job.id}: first comment posted${company ? ` as ${BRAND_NAME}` : ''}`);
+    });
   if (job.comment?.trim()) {
-    if (!job.commented)
-      await step(company ? 'comment on the page post' : 'first comment', async () => {
-        await commentOn(page, urn, job.comment, company ? BRAND_NAME : null, job.id);
-        saveJob({ ...readJob(job.id), commented: true });
-        log(`job ${job.id}: first comment posted${company ? ` as ${BRAND_NAME}` : ''}`);
-      });
     if (wantRepost && !job.repostCommented)
       await step('comment on the repost', async () => {
         if (!repostUrn) throw new Error('the repost was not found on your profile, so it was not commented: add the comment by hand');
@@ -514,7 +516,7 @@ async function runJob(ctx, job) {
     // Inside the try, so a missing image is recorded on the item (and it goes back to the queue).
     if (job.asset && !existsSync(job.asset)) throw new Error(`asset is gone: ${job.asset}`);
     // Without a name the page comment would go out as the member while the log said the page.
-    if (job.mode === 'company' && job.comment?.trim() && !BRAND_NAME) throw new Error('brand.name is not set in config.json: the first comment cannot go out as the page');
+    if (job.mode === 'company' && job.pageComment?.trim() && !BRAND_NAME) throw new Error('brand.name is not set in config.json: the first comment cannot go out as the page');
     const urn = await publish(page, job);
     const company = job.mode === 'company';
     if (dryRun) {

@@ -30,8 +30,10 @@ export interface QueueItem {
   mode: QueueMode;
   text: string;
   repost: string;
-  /** First comment: on the post (as the page in company mode), and on the repost (as the author). */
+  /** First comment by the author: on the personal post, or on the repost in company mode. */
   comment?: string;
+  /** Company mode: the page's own comment on its post (the page's voice, the company's site). */
+  pageComment?: string;
   status: QueueStatus;
   asset?: string | null;
   error?: string;

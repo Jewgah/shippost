@@ -216,7 +216,7 @@ export function getStatus(): Status {
     hasAvatar: Boolean(uploadedAvatarPath()),
     companyMode: readSettings().companyMode,
     hasCompanyPage: Boolean(c.brand.linkedinPageUrl),
-    commentLinks: { siteUrl: c.brand.siteUrl, landingUrl: c.brand.landingUrl },
+    commentLinks: { siteUrl: c.brand.siteUrl, landingUrl: c.brand.landingUrl, companyUrl: c.brand.companyUrl },
     recentPostCount: recentPostCount(),
   };
 }

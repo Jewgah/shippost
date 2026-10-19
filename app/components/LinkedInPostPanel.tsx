@@ -1,5 +1,5 @@
 "use client";
-import { defaultComment, type CommentLinks } from "@/lib/firstComment";
+import { defaultComment, defaultPageComment, type CommentLinks } from "@/lib/firstComment";
 import { useEffect, useState } from "react";
 import type { DraftOption } from "@/lib/draftParser";
 
@@ -26,7 +26,7 @@ export default function LinkedInPostPanel({
   companyMode,
   brandName,
   hasCompanyPage,
-  commentLinks = { siteUrl: "", landingUrl: "" },
+  commentLinks = { siteUrl: "", landingUrl: "", companyUrl: "" },
   onGenerateCompany,
   generatingCompany = false,
 }: {
@@ -47,6 +47,8 @@ export default function LinkedInPostPanel({
   const [repost, setRepost] = useState(option.repostCaption);
   // Picked per mode (site link, or the Infinify offer on a profile-only Infinify post), still editable.
   const [comment, setComment] = useState(() => defaultComment(option, "personal", commentLinks));
+  // Company mode: the page's own comment on its post (its voice, its site), apart from the author's.
+  const [pageComment, setPageComment] = useState(() => defaultPageComment(commentLinks));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
@@ -74,7 +76,7 @@ export default function LinkedInPostPanel({
       const r = await fetch("/api/linkedin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, option: option.n, mode, text, repost, comment }),
+        body: JSON.stringify({ date, option: option.n, mode, text, repost, comment, pageComment }),
       });
       const j = await r.json();
       if (!r.ok) setErr(j.error || "Couldn't add it to the queue.");
@@ -144,9 +146,16 @@ export default function LinkedInPostPanel({
         </label>
       )}
 
+      {mode === "company" && (
+        <label className="block">
+          <span className="mb-1 block text-xs text-muted">First comment as {brandName || "the page"} on its post (the page&apos;s voice), empty = none</span>
+          <textarea value={pageComment} onChange={(e) => setPageComment(e.target.value)} rows={2} maxLength={1250} className={`${field} resize-y`} />
+        </label>
+      )}
+
       <label className="block">
         <span className="mb-1 block text-xs text-muted">
-          First comment {mode === "company" ? `(as ${brandName || "the page"} on its post, and as you on your repost)` : "(on your post)"}, empty = none
+          {mode === "company" ? "Your comment on your repost" : "First comment (on your post)"}, empty = none
         </span>
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} maxLength={1250} className={`${field} resize-y`} />
       </label>

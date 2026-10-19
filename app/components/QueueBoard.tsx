@@ -14,6 +14,7 @@ type Item = {
   text: string;
   repost: string;
   comment?: string;
+  pageComment?: string;
   status: "queued" | "posting" | "posted" | "failed";
   error?: string;
   createdAt: string;
@@ -329,11 +330,15 @@ export default function QueueBoard({
                       />
                     </div>
 
+                    {i.mode === "company" && i.pageComment && (
+                      <div>
+                        <div className="mb-1 text-xs text-muted">First comment as {brandName || "the page"} on its post</div>
+                        <p className="whitespace-pre-wrap rounded-lg border border-border p-2 text-xs text-fg">{i.pageComment}</p>
+                      </div>
+                    )}
                     {i.comment && (
                       <div>
-                        <div className="mb-1 text-xs text-muted">
-                          First comment {i.mode === "company" ? `(as ${brandName || "the page"}, and as you on the repost)` : ""}
-                        </div>
+                        <div className="mb-1 text-xs text-muted">{i.mode === "company" ? "Your comment on the repost" : "First comment"}</div>
                         <p className="whitespace-pre-wrap rounded-lg border border-border p-2 text-xs text-fg">{i.comment}</p>
                       </div>
                     )}

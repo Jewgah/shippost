@@ -5,7 +5,7 @@ import { configPath, expandTilde, findRepoRoot } from "./paths";
 
 export interface ShippostConfig {
   author: { name: string; bio: string; portfolioDataDir: string };
-  brand: { name: string; tagline: string; offers: string; vibe: string; logoPath: string; linkedinPageUrl: string; siteUrl: string; landingUrl: string };
+  brand: { name: string; tagline: string; offers: string; vibe: string; logoPath: string; linkedinPageUrl: string; siteUrl: string; landingUrl: string; companyUrl: string };
   scrub: { clientNames: string[]; extraTerms: string[] };
   output: {
     draftsDir: string;
@@ -56,6 +56,7 @@ export function loadConfig(): ShippostConfig {
     linkedinPageUrl: raw.brand?.linkedinPageUrl ?? "",
     siteUrl: raw.brand?.siteUrl ?? "",
     landingUrl: raw.brand?.landingUrl ?? "",
+    companyUrl: raw.brand?.companyUrl ?? "",
   };
   const scrub = {
     clientNames: Array.isArray(raw.scrub?.clientNames) ? raw.scrub.clientNames : [],

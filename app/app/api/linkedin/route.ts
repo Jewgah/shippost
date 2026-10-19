@@ -121,12 +121,13 @@ async function addToQueue(b: Record<string, unknown>) {
   const text = typeof b.text === "string" ? b.text.trim() : "";
   const repost = typeof b.repost === "string" ? b.repost.trim() : "";
   const comment = typeof b.comment === "string" ? b.comment.trim() : "";
+  const pageComment = typeof b.pageComment === "string" ? b.pageComment.trim() : "";
 
   if (!isDraftId(date) || !validOption(option)) return bad("invalid draft or option");
   if (!mode) return bad("mode must be personal or company");
   if (!text || text.length > 3000) return bad("post text must be 1-3000 characters");
   if (repost.length > 3000) return bad("repost caption is over 3000 characters");
-  if (comment.length > 1250) return bad("the first comment is over 1250 characters (LinkedIn's comment limit)");
+  if (comment.length > 1250 || pageComment.length > 1250) return bad("a first comment is over 1250 characters (LinkedIn's comment limit)");
 
   const c = loadConfig();
   if (mode === "company" && !c.brand.linkedinPageUrl)
@@ -152,6 +153,7 @@ async function addToQueue(b: Record<string, unknown>) {
     text,
     repost: mode === "company" ? repost : "",
     comment,
+    pageComment: mode === "company" ? pageComment : "",
     status: "queued",
     createdAt: new Date().toISOString(),
   };
