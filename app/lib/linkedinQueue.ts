@@ -34,6 +34,9 @@ export interface QueueItem {
   comment?: string;
   /** Company mode: the page's own comment on its post (the page's voice, the company's site). */
   pageComment?: string;
+  /** Set by the trigger when the cards exist: the image attached under each first comment. */
+  postCard?: string | null;
+  repostCard?: string | null;
   status: QueueStatus;
   asset?: string | null;
   error?: string;
@@ -107,6 +110,17 @@ export function listQueue(): QueueItem[] {
 /** The one item "Trigger next post" may post: the oldest still queued. */
 export function nextQueued(items: QueueItem[] = listQueue()): QueueItem | null {
   return items.find((i) => i.status === "queued") ?? null;
+}
+
+/**
+ * The comment cards cut from the clip: `post` (the end card, logo + site) goes under the page's
+ * comment, `repost` (the takeaway beat) under the author's comment (on the repost, or on a personal post).
+ */
+export type CardKind = "post" | "repost";
+export const cardPath = (id: string, kind: CardKind) => path.join(visualsDir(), `${id}-card-${kind}.png`);
+export function cardsFor(id: string): Record<CardKind, boolean> {
+  if (!isQueueId(id)) return { post: false, repost: false };
+  return { post: fs.existsSync(cardPath(id, "post")), repost: fs.existsSync(cardPath(id, "repost")) };
 }
 
 /** Which candidates (images 1-3, video 4) exist on disk right now. */

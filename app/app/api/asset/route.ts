@@ -4,7 +4,7 @@ import path from "node:path";
 import { loadConfig } from "@/lib/config";
 import { isDraftId } from "@/lib/draftId";
 import { effectiveLogoPath, uploadedAvatarPath } from "@/lib/settings";
-import { isQueueId, variantImagePath } from "@/lib/linkedinQueue";
+import { cardPath, isQueueId, variantImagePath } from "@/lib/linkedinQueue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +46,12 @@ export async function GET(req: Request) {
   else if (which === "visual" || which === "carousel") {
     file = optionAssetPath(params.get("date"), params.get("option"), which === "visual" ? "png" : "pdf");
     if (!file) return NextResponse.json({ error: "invalid draft id or option" }, { status: 400 });
+  } else if (which === "card") {
+    // A queued post's comment card: built from a validated queue id and one of two kinds.
+    const id = params.get("id");
+    const kind = params.get("kind");
+    if (!isQueueId(id) || (kind !== "post" && kind !== "repost")) return NextResponse.json({ error: "invalid queue id or card" }, { status: 400 });
+    file = cardPath(id, kind);
   } else if (which === "queue") {
     // A queued post's candidate: built from a validated queue id and an integer 1-3 (images) or 4 (video).
     const id = params.get("id");

@@ -173,6 +173,34 @@ function askClaude(cfg, prompt) {
 // A Remotion render of a 20 s clip takes well under a minute; past this it is stuck, not slow.
 const REMOTION_TIMEOUT_MS = 10 * 60 * 1000;
 
+// Mirrors marketing-studio's studio/src/lib/postClip.ts act table (30 fps).
+const CLIP = { hook: 81, image: 81, point: 90, takeaway: 75, end: 93, fps: 30 };
+
+/**
+ * The two comment cards, cut from the clip with ffmpeg: the takeaway beat (<id>-card-repost.png,
+ * under the author's comment on the repost) and the end card (<id>-card-post.png, under the page's
+ * or the post's first comment). Needs <id>.clip.json for the act count. Never fatal: no ffmpeg or
+ * no clip means text-only comments.
+ */
+export async function cutCards({ id, visualsDir, queueDir }) {
+  const mp4 = join(visualsDir, `${id}-v4.mp4`);
+  let props;
+  try {
+    props = JSON.parse(readFileSync(join(queueDir, `${id}.clip.json`), 'utf8'));
+  } catch {
+    return log(`job ${id}: no clip props, no comment cards`);
+  }
+  if (!existsSync(mp4)) return;
+  const takeawayFrom = CLIP.hook + (props.image ? CLIP.image : 0) + CLIP.point * Math.max(1, Math.min(3, props.points?.length ?? 1));
+  // 60 frames into each act: the takeaway's underline is drawn, the end card's logo has settled.
+  const at = { repost: takeawayFrom + 60, post: takeawayFrom + CLIP.takeaway + 60 };
+  for (const [kind, frame] of Object.entries(at)) {
+    const out = join(visualsDir, `${id}-card-${kind}.png`);
+    const r = await run('ffmpeg', ['-y', '-loglevel', 'error', '-ss', (frame / CLIP.fps).toFixed(3), '-i', mp4, '-frames:v', '1', out], { cwd: visualsDir, env: process.env }, 60_000);
+    if (r.code !== 0) log(`job ${id}: card ${kind} not cut (${lastLine(r.stderr) || `ffmpeg exited ${r.code}`})`);
+  }
+}
+
 /** Render <id>-v4.mp4 with marketing-studio. Resolves null on success, else the error to show. */
 export async function renderClip({ id, item, cfg, studio, visualsDir, queueDir }) {
   const { clipProps, fallbackScript, parseScript, pickTrack, scriptPrompt } = await import(
@@ -218,6 +246,7 @@ export async function renderClip({ id, item, cfg, studio, visualsDir, queueDir }
     const r = await run(remotion, ['render', 'PostClip', tmp, `--props=${propsFile}`], { cwd: studioApp, env: process.env }, REMOTION_TIMEOUT_MS);
     if (r.code !== 0) return `video: ${lastLine(r.stderr) || `remotion exited ${r.code}`}`;
     renameSync(tmp, join(visualsDir, `${id}-v4.mp4`));
+    await cutCards({ id, visualsDir, queueDir });
     log(`job ${id}: video rendered (${script ? "claude's script" : 'fallback script'}, ${track ?? 'no music'})`);
     return null;
   } finally {
@@ -299,6 +328,8 @@ async function main() {
   };
   let have = onDisk();
   if (have.done === total) {
+    // Clips rendered before the comment cards existed get theirs here (cheap, no lock needed).
+    if (have.videoDone && !existsSync(join(visualsDir, `${id}-card-post.png`))) await cutCards({ id, visualsDir, queueDir });
     setState({ state: 'done', done: total, total });
     log(`job ${id}: every candidate is already rendered`);
     return 0;

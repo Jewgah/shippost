@@ -21,12 +21,14 @@ type Item = {
   postedAt?: string;
   reposted?: boolean;
   images: number[];
+  cards?: { post: boolean; repost: boolean };
   render: Render;
 };
 type Queue = { items: Item[]; nextId: string | null; rendering: boolean };
 
 // Mirrors VIDEO in lib/linkedinQueue.ts (server-only, so not importable here).
 const VIDEO = 4;
+const cardUrl = (id: string, kind: "post" | "repost") => `/api/asset?which=card&id=${encodeURIComponent(id)}&kind=${kind}`;
 const imgUrl = (id: string, v: number) => `/api/asset?which=queue&id=${encodeURIComponent(id)}&v=${v}`;
 const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "");
 // Ease-out cubic-bezier for opening and closing a post: quick start, soft landing.
@@ -334,12 +336,20 @@ export default function QueueBoard({
                       <div>
                         <div className="mb-1 text-xs text-muted">First comment as {brandName || "the page"} on its post</div>
                         <p className="whitespace-pre-wrap rounded-lg border border-border p-2 text-xs text-fg">{i.pageComment}</p>
+                        {i.cards?.post && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={cardUrl(i.id, "post")} alt="Card under the page comment" className="mt-1 w-28 rounded border border-border" />
+                        )}
                       </div>
                     )}
                     {i.comment && (
                       <div>
                         <div className="mb-1 text-xs text-muted">{i.mode === "company" ? "Your comment on the repost" : "First comment"}</div>
                         <p className="whitespace-pre-wrap rounded-lg border border-border p-2 text-xs text-fg">{i.comment}</p>
+                        {i.cards?.repost && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={cardUrl(i.id, "repost")} alt="Card under the comment" className="mt-1 w-28 rounded border border-border" />
+                        )}
                       </div>
                     )}
 

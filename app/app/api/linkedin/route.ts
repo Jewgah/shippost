@@ -11,6 +11,8 @@ import { recordPick } from "@/lib/voice";
 import { STALE_MS } from "@/lib/runLock";
 import { comfyBaseUrl } from "@/lib/comfy";
 import {
+  cardPath,
+  cardsFor,
   imagesFor,
   isQueueId,
   itemPath,
@@ -195,7 +197,12 @@ async function trigger(b: Record<string, unknown>) {
     asset = variantImagePath(id, image);
     if (!fs.existsSync(asset)) return bad("that image does not exist (yet)");
   }
-  writeItem({ ...item, asset, error: undefined });
+  // The comment cards ride along when the clip produced them; a missing card means a text-only comment.
+  // The logo card is the page's signature; the author's comment (on the repost, or on a personal post)
+  // gets the takeaway card.
+  const cards = cardsFor(id);
+  const card = (kind: "post" | "repost") => (cards[kind] ? cardPath(id, kind) : null);
+  writeItem({ ...item, asset, postCard: item.mode === "company" ? card("post") : card("repost"), repostCard: item.mode === "company" ? card("repost") : null, error: undefined });
 
   const { repoRoot } = loadConfig().resolved;
   spawnDetached(path.join(repoRoot, "app", "scripts", "linkedin-post.mjs"), ["--job", id], path.join(queueDir(), `${id}.log`));
@@ -237,13 +244,13 @@ export async function GET(req: Request) {
     const position = new Map(items.filter((i) => i.status === "queued").map((i, n) => [i.id, n + 1]));
     items = items.filter((i) => i.draft === date && i.option === option);
     return NextResponse.json({
-      items: items.map((i) => ({ ...i, position: position.get(i.id) ?? null, images: imagesFor(i.id), render: readRenderState(i.id) })),
+      items: items.map((i) => ({ ...i, position: position.get(i.id) ?? null, images: imagesFor(i.id), cards: cardsFor(i.id), render: readRenderState(i.id) })),
       nextId: next?.id ?? null,
     });
   }
 
   return NextResponse.json({
-    items: items.map((i) => ({ ...i, images: imagesFor(i.id), render: readRenderState(i.id) })),
+    items: items.map((i) => ({ ...i, images: imagesFor(i.id), cards: cardsFor(i.id), render: readRenderState(i.id) })),
     nextId: nextQueued(items)?.id ?? null,
     rendering: renderingNow(),
     hasCompanyPage: Boolean(loadConfig().brand.linkedinPageUrl),

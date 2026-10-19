@@ -338,7 +338,7 @@ async function actAs(page, name) {
  * Measured: the box is the textbox "Text editor for creating comment"; once it holds text, its
  * submit is a "Comment" button next to "Share photo". Enter would submit, so new lines are Shift+Enter.
  */
-async function commentOn(page, urn, text, asPage, label) {
+async function commentOn(page, urn, text, asPage, label, image = null) {
   await page.goto(`https://www.linkedin.com/feed/update/${urn}/`);
   await dismissPopups(page);
   // Always set, never assumed: LinkedIn remembers the last identity chosen on a post.
@@ -348,6 +348,20 @@ async function commentOn(page, urn, text, asPage, label) {
     await box.waitFor({ timeout: 15_000 });
     await pasteInto(box, text, 'Shift+Enter');
     const form = box.locator('xpath=ancestor::*[.//button[@aria-label="Share photo"]][1]');
+    // The comment card (a frame of the post's clip), through the form's own "Share photo" button.
+    // Best effort: a comment without its card is better than no comment (ASSUMED shape of the
+    // attached thumbnail: an <img> with a blob: src until it is sent).
+    if (image && !dryRun) {
+      try {
+        const chooser = page.waitForEvent('filechooser', { timeout: 10_000 });
+        await form.locator('button[aria-label="Share photo"]').first().click();
+        await (await chooser).setFiles(image);
+        await form.locator('img[src^="blob:"]').first().waitFor({ timeout: 15_000 }).catch(() => page.waitForTimeout(4_000));
+        log(`comment on ${urn}: card attached (${basename(image)})`);
+      } catch (e) {
+        log(`comment on ${urn}: card not attached (${(e && e.message) || e}), sending the text alone`);
+      }
+    }
     const submit = form.getByRole('button', { name: /^comment$/i }).last();
     await submit.waitFor({ timeout: 15_000 });
     // A link gets its preview card only if LinkedIn has fetched it BEFORE Comment is clicked: the
@@ -462,7 +476,7 @@ async function followUps(page, job, urn) {
   const onPost = company ? job.pageComment : job.comment;
   if (onPost?.trim() && !job.commented)
     await step(company ? 'comment on the page post' : 'first comment', async () => {
-      await commentOn(page, urn, onPost, company ? BRAND_NAME : null, job.id);
+      await commentOn(page, urn, onPost, company ? BRAND_NAME : null, job.id, job.postCard ?? null);
       saveJob({ ...readJob(job.id), commented: true });
       log(`job ${job.id}: first comment posted${company ? ` as ${BRAND_NAME}` : ''}`);
     });
@@ -470,7 +484,7 @@ async function followUps(page, job, urn) {
     if (wantRepost && !job.repostCommented)
       await step('comment on the repost', async () => {
         if (!repostUrn) throw new Error('the repost was not found on your profile, so it was not commented: add the comment by hand');
-        await commentOn(page, repostUrn, job.comment, null, job.id);
+        await commentOn(page, repostUrn, job.comment, null, job.id, job.repostCard ?? null);
         saveJob({ ...readJob(job.id), repostCommented: true });
         log(`job ${job.id}: comment posted on the repost`);
       });
