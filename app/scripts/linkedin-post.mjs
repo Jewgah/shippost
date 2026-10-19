@@ -116,7 +116,11 @@ async function openBrowser() {
     // Headed on purpose: LinkedIn challenges headless browsers far more often.
     // ponytail: SHIPPOST_LINKEDIN_HEADLESS=1 is for dry runs only (checking selectors without a window);
     // real posts stay headed, LinkedIn challenges headless browsers far more often.
-    return await chromium.launchPersistentContext(PROFILE_DIR, { headless: dryRun && process.env.SHIPPOST_LINKEDIN_HEADLESS === '1', viewport: { width: 1280, height: 900 } });
+    const ctx = await chromium.launchPersistentContext(PROFILE_DIR, { headless: dryRun && process.env.SHIPPOST_LINKEDIN_HEADLESS === '1', viewport: { width: 1280, height: 900 } });
+    // LinkedIn pages keep loading trackers long after they are usable: 30 s to "load" was missed on
+    // a real post (2026-10-19, the page admin dashboard), so navigation gets 90 s everywhere.
+    ctx.setDefaultNavigationTimeout(90_000);
+    return ctx;
   } catch (e) {
     console.error(`could not start chromium: ${(e && e.message) || e}\nrun: npx playwright install chromium`);
     unlock();
@@ -218,7 +222,7 @@ async function publish(page, job) {
   // The admin dashboard is the page address Jordan uses; `admin/page-posts/published/` redirected to
   // the personal feed (2026-10-14), and posting from there would post as the person, not the page.
   const start = job.mode === 'company' ? new URL('admin/dashboard/', PAGE_URL).href : 'https://www.linkedin.com/feed/';
-  await page.goto(start);
+  await page.goto(start, { waitUntil: 'domcontentloaded' });
   if (loggedOut(page.url())) {
     // First run (or an expired session): keep this window open on the login page, wait for the
     // user to log in by hand, then carry on with the post. Nothing is posted before that.
@@ -231,7 +235,7 @@ async function publish(page, job) {
           : `not logged in to LinkedIn: the login window closed before the login finished (${(e && e.message) || e})`
       );
     });
-    await page.goto(start);
+    await page.goto(start, { waitUntil: 'domcontentloaded' });
     if (loggedOut(page.url())) throw new Error('still not logged in to LinkedIn after the login window');
   }
   if (job.mode === 'company' && !/\/company\/[^/]+\/admin/.test(page.url()))
@@ -241,7 +245,7 @@ async function publish(page, job) {
   // the personal feed (2026-10-14), so the page's list is its dashboard, like the dry run's.
   const listUrl = job.mode === 'company' ? start : MY_ACTIVITY;
   const before = dryRun ? [] : await urnsOn(page, listUrl, snippetOf(job.text));
-  if (listUrl !== start) await page.goto(start);
+  if (listUrl !== start) await page.goto(start, { waitUntil: 'domcontentloaded' });
   const dialog = await openComposer(page);
   // Image FIRST: attaching it after the text wiped the text (measured 2026-10-14, 0 characters left).
   if (job.asset) await attach(page, dialog, job.asset);
