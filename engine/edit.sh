@@ -47,12 +47,31 @@ Rules:
 Save the file in place. Do not ask any questions."
 fi
 
+before="$(shasum "$file" | cut -d' ' -f1)"
+
+# Edit + acceptEdits: a headless run cannot answer a permission prompt, and without these the
+# model drafted the change and then could not save it (exit 0, file untouched). acceptEdits only
+# auto-approves file edits; shell commands stay limited to the allowed-tools list.
 # shellcheck disable=SC2086 # CFG_ALLOWED_TOOLS is a deliberate space-separated arg list
 "$CFG_CLAUDE_BIN" -p "$PROMPT" \
-  --allowed-tools $CFG_ALLOWED_TOOLS \
+  --allowed-tools $CFG_ALLOWED_TOOLS Edit \
+  --permission-mode acceptEdits \
   --model "$CFG_MODEL" \
   >> "$LOG" 2>&1
 rc=$?
+
+# Exit 0 is not proof: check the draft really changed (and, for "Generate for company", that
+# section D is now in it). Exit 3 = the AI answered but nothing was saved.
+if [ "$rc" -eq 0 ]; then
+  if [ "$(shasum "$file" | cut -d' ' -f1)" = "$before" ]; then
+    echo "$(date '+%F %T') edit NOT SAVED: option $opt in $file is unchanged" >> "$LOG"
+    rc=3
+  # Only Option $opt's block counts: another option's section D must not pass for this one.
+  elif [ "${SHIPPOST_EDIT_MODE:-}" = "company" ] && ! awk -v o="$opt" '/^## /{blk = ($0 ~ ("Option " o "([^0-9]|$)"))} blk' "$file" | grep -q 'Company page post'; then
+    echo "$(date '+%F %T') edit NOT SAVED: no company page section in option $opt of $file" >> "$LOG"
+    rc=3
+  fi
+fi
 
 if [ "$rc" -eq 0 ]; then
   echo "$(date '+%F %T') edit SUCCESS: option $opt in $file" >> "$LOG"

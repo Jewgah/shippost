@@ -66,7 +66,9 @@ export async function POST(req: Request) {
     releaseRunLock(lock, token); // compare-and-delete: never unlinks a newer run's lock
   };
   child.on("error", (err) => finish(false, { error: String(err) }));
-  child.on("close", (code) => finish(code === 0, { code }));
+  child.on("close", (code) =>
+    finish(code === 0, code === 3 ? { code, error: "The AI answered but the draft was not changed. Try again; details in drafts/.run.log" } : { code })
+  );
 
   return NextResponse.json({ started: true, running: true, date, option });
 }

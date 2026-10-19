@@ -1,4 +1,5 @@
 "use client";
+import type { CommentLinks } from "@/lib/firstComment";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
@@ -22,6 +23,7 @@ export default function OptionCard({
   initiallyRendered = false,
   hasCarousel = false,
   hasCompanyPage = false,
+  commentLinks,
 }: {
   option: DraftOption;
   date: string;
@@ -39,6 +41,7 @@ export default function OptionCard({
   hasCarousel?: boolean;
   /** brand.linkedinPageUrl is configured, so the queue panel can target the company page. */
   hasCompanyPage?: boolean;
+  commentLinks?: CommentLinks;
 }) {
   const [queueing, setQueueing] = useState(false);
   const [posted, setPosted] = useState(false);
@@ -390,6 +393,9 @@ export default function OptionCard({
           companyMode={companyMode}
           brandName={brandName}
           hasCompanyPage={hasCompanyPage}
+          commentLinks={commentLinks}
+          onGenerateCompany={() => applyEdit(true)}
+          generatingCompany={editRunning && companyRun}
         />
       )}
 

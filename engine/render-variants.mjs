@@ -27,13 +27,19 @@
  *    local server).
  * A failed render leaves the item queued: it can still be posted, text only.
  *
+ * When config `video.studioDir` and `video.brandId` are set, a 4th candidate follows the images:
+ * <id>-v4.mp4, a 4:5 explainer clip rendered by marketing-studio's Remotion `PostClip`. Its script
+ * (hook, points, takeaway) comes from one `claude -p` call on the post, with a no-AI fallback; its
+ * ambient track is picked from <studioDir>/studio/public/<brandId>/music/<mood>-N.mp3. Rules in
+ * app/lib/clipProps.ts. No ComfyUI.
+ *
  * Node >= 22.18 (type stripping): this imports the app's TypeScript directly, like
  * app/scripts/build-carousel.mjs, so the prompt and seed rules live in one tested place.
  *
  * Exit codes: 0 rendered (or nothing to render) · 1 bad input or a failed render.
  */
-import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { execFile, spawn } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, realpathSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -123,20 +129,109 @@ function releaseLock(lock, token) {
   }
 }
 
-/** Run a child to completion; resolves its exit code and the tail of its stderr. */
-function run(cmd, argv, opts) {
+// The child running right now, killed on a signal so a dead parent never leaves an orphan render.
+let current = null;
+/** Run a child to completion; resolves its exit code and the tail of its stderr. `timeoutMs` kills it. */
+function run(cmd, argv, opts, timeoutMs) {
   return new Promise((res) => {
     const child = spawn(cmd, argv, { ...opts, stdio: ['ignore', 'inherit', 'pipe'] });
+    current = child;
     let stderr = '';
+    const timer = timeoutMs
+      ? setTimeout(() => {
+          stderr += `\nkilled after ${Math.round(timeoutMs / 60_000)} min without finishing`;
+          child.kill('SIGKILL');
+        }, timeoutMs)
+      : null;
     child.stderr.on('data', (c) => {
       process.stderr.write(c);
       stderr = (stderr + c.toString()).slice(-2000);
     });
-    child.on('error', (e) => res({ code: null, stderr: String(e) }));
-    child.on('close', (code) => res({ code, stderr }));
+    const end = (r) => {
+      if (timer) clearTimeout(timer);
+      if (current === child) current = null;
+      res(r);
+    };
+    child.on('error', (e) => end({ code: null, stderr: String(e) }));
+    child.on('close', (code) => end({ code, stderr }));
   });
 }
 const lastLine = (s) => s.trim().split('\n').filter(Boolean).pop() ?? '';
+
+/** Claude's answer to a one-shot prompt, or '' when it fails (the caller falls back). */
+function askClaude(cfg, prompt) {
+  const bin = expandTilde(cfg?.engine?.claudeBin || 'claude');
+  const argv = ['-p', prompt, ...(cfg?.engine?.model ? ['--model', cfg.engine.model] : [])];
+  return new Promise((res) =>
+    execFile(bin, argv, { timeout: 180_000, maxBuffer: 1 << 20 }, (err, stdout) => {
+      if (err) log(`clip script: claude failed (${err.message.split('\n')[0]}), using the post's own sentences`);
+      res(err ? '' : stdout);
+    })
+  );
+}
+
+// A Remotion render of a 20 s clip takes well under a minute; past this it is stuck, not slow.
+const REMOTION_TIMEOUT_MS = 10 * 60 * 1000;
+
+/** Render <id>-v4.mp4 with marketing-studio. Resolves null on success, else the error to show. */
+export async function renderClip({ id, item, cfg, studio, visualsDir, queueDir }) {
+  const { clipProps, fallbackScript, parseScript, pickTrack, scriptPrompt } = await import(
+    pathToFileURL(join(ROOT, 'app', 'lib', 'clipProps.ts')).href
+  );
+  const brandId = String(cfg.video.brandId);
+  // The brand id becomes a directory name under the studio's public dir: only a plain slug goes there.
+  if (!/^[a-z0-9-]+$/i.test(brandId)) return `video: video.brandId "${brandId}" is not a plain slug`;
+  const studioApp = join(studio, 'studio');
+  // The studio's own Remotion, never npx: with node_modules missing, npx would fetch one from the registry.
+  const remotion = join(studioApp, 'node_modules', '.bin', 'remotion');
+  if (!existsSync(remotion)) return `video: no Remotion in ${studioApp} (run npm install there)`;
+  // Remotion only reads images from its public dir, so the first image is copied in for the render.
+  const image = [1, 2, 3].map((v) => join(visualsDir, `${id}-v${v}.png`)).find((f) => existsSync(f));
+  const shot = image ? `${brandId}/queue/${id}.png` : null;
+  // Rendered under a temp name: the queue lists the clip as soon as <id>-v4.mp4 exists.
+  const tmp = join(visualsDir, `${id}-v4.tmp.mp4`);
+  try {
+    if (image) {
+      mkdirSync(join(studioApp, 'public', brandId, 'queue'), { recursive: true });
+      copyFileSync(image, join(studioApp, 'public', shot));
+    }
+    let host = '';
+    try {
+      host = new URL(cfg?.brand?.siteUrl).host;
+    } catch {
+      /* no site: the brand name closes the clip */
+    }
+    const kicker = (item.mode === 'company' ? cfg?.brand?.name : cfg?.author?.name) || cfg?.brand?.name || '';
+    const answer = await askClaude(cfg, scriptPrompt(item.text));
+    const script = parseScript(answer);
+    if (!script && answer) log(`clip script: claude's answer was not usable, using the post's own sentences`);
+    let tracks = [];
+    try {
+      tracks = readdirSync(join(studioApp, 'public', brandId, 'music'));
+    } catch {
+      /* no music folder: a silent clip */
+    }
+    const track = pickTrack(tracks, item.pillar, id);
+    const props = clipProps(script ?? fallbackScript(item), { brandId, kicker, cta: cfg.video.cta || host || cfg?.brand?.name || kicker }, shot, track && `${brandId}/music/${track}`);
+    const propsFile = join(queueDir, `${id}.clip.json`);
+    writeFileSync(propsFile, JSON.stringify(props));
+    const r = await run(remotion, ['render', 'PostClip', tmp, `--props=${propsFile}`], { cwd: studioApp, env: process.env }, REMOTION_TIMEOUT_MS);
+    if (r.code !== 0) return `video: ${lastLine(r.stderr) || `remotion exited ${r.code}`}`;
+    renameSync(tmp, join(visualsDir, `${id}-v4.mp4`));
+    log(`job ${id}: video rendered (${script ? "claude's script" : 'fallback script'}, ${track ?? 'no music'})`);
+    return null;
+  } finally {
+    // The copied image and a half-written video never outlive the job (the tmp is gone after the rename).
+    for (const f of [shot && join(studioApp, 'public', shot), tmp]) {
+      if (!f) continue;
+      try {
+        unlinkSync(f);
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+}
 
 async function main() {
   if (!process.features.typescript) {
@@ -186,10 +281,26 @@ async function main() {
   // A per-item salt, so the same option queued twice gets new images rather than the same three.
   const salt = [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 0);
   const variants = option ? variantPrompts(option.visual, salt) : [];
-  const total = variants.length;
+  const studio = cfg?.video?.studioDir && cfg?.video?.brandId ? expandTilde(cfg.video.studioDir) : null;
+  // ponytail: the clip rides on the image job, so an option with no AI prompt gets no clip either.
+  const total = variants.length ? variants.length + (studio ? 1 : 0) : 0;
   if (!total) {
     setState({ state: 'done', done: 0, total: 0 });
     log(`job ${id}: no AI prompt on this option, nothing to render`);
+    return 0;
+  }
+
+  // Re-runnable: candidates already on disk are kept, so `--job` on an old item only adds what is
+  // missing (the video for items queued before it existed, or after a crash).
+  const onDisk = () => {
+    const missing = variants.map((_, v) => v).filter((v) => !existsSync(join(visualsDir, `${id}-v${v + 1}.png`)));
+    const videoDone = Boolean(studio) && existsSync(join(visualsDir, `${id}-v4.mp4`));
+    return { missing, videoDone, done: variants.length - missing.length + (videoDone ? 1 : 0) };
+  };
+  let have = onDisk();
+  if (have.done === total) {
+    setState({ state: 'done', done: total, total });
+    log(`job ${id}: every candidate is already rendered`);
     return 0;
   }
 
@@ -197,9 +308,9 @@ async function main() {
   const waitStart = Date.now();
   let token = acquireLock(lock);
   while (!token) {
-    setState({ state: 'waiting', done: 0, total });
+    setState({ state: 'waiting', done: have.done, total });
     if (Date.now() - waitStart > MAX_WAIT_MS) {
-      setState({ state: 'failed', done: 0, total, error: 'another render held the image engine for over 2 hours' });
+      setState({ state: 'failed', done: have.done, total, error: 'another render held the image engine for over 2 hours' });
       return 1;
     }
     await sleep(WAIT_POLL_MS);
@@ -210,34 +321,40 @@ async function main() {
     clearInterval(beat);
     releaseLock(lock, token);
   };
-  // A killed renderer must not leave a fresh lock that blocks every render for 15 minutes.
-  for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => (release(), process.exit(1)));
+  // A killed renderer must not leave a fresh lock that blocks every render for 15 minutes, nor a
+  // child still rendering behind the next job.
+  for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP'])
+    process.on(sig, () => {
+      current?.kill('SIGKILL');
+      release();
+      process.exit(1);
+    });
 
   try {
+    // Another run of this same job may have finished while this one waited for the lock: look again.
+    have = onDisk();
+    let { done } = have;
+    const errors = [];
     const base = comfyBaseUrl();
-    if (!(await comfyIsUp(base))) {
+    // An image engine that is down is recorded, and the video (which needs no ComfyUI) still renders.
+    let engineOk = true;
+    if (have.missing.length && !(await comfyIsUp(base))) {
       if (!canStartLocally(base)) {
-        setState({
-          state: 'failed',
-          done: 0,
-          total,
-          error: `The image engine at ${base} is not answering, and it is not on this machine, so it can't be started from here.`,
-        });
-        return 1;
-      }
-      setState({ state: 'rendering', done: 0, total, note: 'starting the image engine' });
-      const started = await run('bash', [join(ROOT, 'engine', 'comfy-headless.sh')], { cwd: ROOT, env: process.env });
-      if (started.code !== 0) {
-        const why = started.stderr.split('\n').map((l) => l.trim()).find((l) => l.startsWith('shippost:')) || lastLine(started.stderr);
-        setState({ state: 'failed', done: 0, total, error: `Couldn't start the image engine${why ? `: ${why}` : ''}` });
-        return 1;
+        engineOk = false;
+        errors.push(`The image engine at ${base} is not answering, and it is not on this machine, so it can't be started from here.`);
+      } else {
+        setState({ state: 'rendering', done, total, note: 'starting the image engine' });
+        const started = await run('bash', [join(ROOT, 'engine', 'comfy-headless.sh')], { cwd: ROOT, env: process.env });
+        if (started.code !== 0) {
+          engineOk = false;
+          const why = started.stderr.split('\n').map((l) => l.trim()).find((l) => l.startsWith('shippost:')) || lastLine(started.stderr);
+          errors.push(`Couldn't start the image engine${why ? `: ${why}` : ''}`);
+        }
       }
     }
 
     mkdirSync(visualsDir, { recursive: true });
-    let done = 0;
-    const errors = [];
-    for (let v = 0; v < total; v++) {
+    for (const v of engineOk ? have.missing : []) {
       setState({ state: 'rendering', done, total });
       const { prompt, seed } = variants[v];
       const r = await run(
@@ -252,12 +369,33 @@ async function main() {
         if (r.code === 2) break; // the engine went away: the next variants would only fail the same way
       }
     }
+    if (studio && !have.videoDone) {
+      setState({ state: 'rendering', done, total, note: 'rendering the video' });
+      let err;
+      try {
+        err = await renderClip({ id, item, cfg, studio, visualsDir, queueDir });
+      } catch (e) {
+        // A throw still ends in a final state: render.json must never stay at "rendering".
+        err = `video: ${(e && e.message) || e}`;
+      }
+      if (err) errors.push(err);
+      else done++;
+    }
     setState(errors.length ? { state: 'failed', done, total, error: errors[0] } : { state: 'done', done, total });
-    log(`job ${id}: ${done}/${total} images`);
+    log(`job ${id}: ${done}/${total} candidates${errors.length ? `, ${errors.length} failed` : ''}`);
     return errors.length ? 1 : 0;
   } finally {
     release();
   }
 }
 
-process.exit(await main());
+// Run only as a script: importing it (for renderClip) must not start a job. Both sides are real
+// paths, so a symlinked checkout still runs.
+const realPath = (p) => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return resolve(p);
+  }
+};
+if (process.argv[1] && realPath(process.argv[1]) === realPath(fileURLToPath(import.meta.url))) process.exit(await main());

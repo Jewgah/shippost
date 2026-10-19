@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 
 // Acceptance check (loopit gentle-twirling-oasis): the /api/linkedin queue route.
-// - Trigger posts ONLY the next item in the queue (FIFO by createdAt): a stale page asking for any
-//   other id is refused with 409, and nothing is spawned.
+// - Trigger posts ANY queued item (FIFO dropped on 2026-10-14 at Jordan's request: "this queue is
+//   limiting"), but never one that is not queued: those are refused with 409 and nothing spawns.
 // - GET records a `posted` item's pick (cadence bar + voice corpus) exactly once, the first time the
 //   app sees it, and marks the item `picked: true`.
 // Child processes are stubbed: this test must never start a browser or a renderer.
@@ -21,7 +21,8 @@ vi.mock("node:child_process", async (orig) => {
   const over = { spawn: stub("spawn"), fork: stub("fork"), exec: stub("exec"), execFile: stub("execFile") };
   return { ...actual, ...over, default: { ...(actual.default as object), ...over } };
 });
-vi.mock("child_process", async () => await import("node:child_process"));
+// (No separate vi.mock("child_process"): vitest treats it as the same module as node:child_process,
+// and that second mock replaced the stub above with the real module.)
 
 const DRAFT = "2026-10-01_120000";
 const DRAFT_MD = `# LinkedIn drafts - 2026-10-01 · 3 options
@@ -123,19 +124,23 @@ beforeEach(() => {
 });
 
 describe("/api/linkedin queue route", () => {
-  it("refuses to trigger an item that is not next in the queue (409), and spawns nothing", async () => {
+  it("triggers any queued item, but refuses one that is not queued (409) and spawns nothing", async () => {
     writeItem(item("qfirst01", 1, "queued", "2026-10-01T10:00:00.000Z"));
     writeItem(item("qsecond02", 2, "queued", "2026-10-01T11:00:00.000Z"));
+    writeItem(item("qposted03", 3, "posted", "2026-10-01T09:00:00.000Z"));
     const { POST } = await loadRoute();
-    const req = new Request(URL_BASE, {
-      method: "POST",
-      headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" },
-      body: JSON.stringify({ action: "trigger", id: "qsecond02", image: null }),
-    });
-    const res = POST ? await POST(req) : null;
-    expect(res?.status, "an out-of-order trigger must be refused with 409").toBe(409);
-    expect(spawned, "an out-of-order trigger must not spawn the poster").toEqual([]);
-    expect(readItem("qsecond02").status).toBe("queued");
+    const trigger = (id: string) =>
+      new Request(URL_BASE, {
+        method: "POST",
+        headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" },
+        body: JSON.stringify({ action: "trigger", id, image: null }),
+      });
+    const posted = POST ? await POST(trigger("qposted03")) : null;
+    expect(posted?.status, "a posted item must never be posted again").toBe(409);
+    expect(spawned, "a refused trigger must not spawn the poster").toEqual([]);
+    const second = POST ? await POST(trigger("qsecond02")) : null;
+    expect(second?.status, "any queued item can be posted, not only the oldest").toBe(200);
+    expect(spawned.length).toBe(1);
     expect(readItem("qfirst01").status).toBe("queued");
   });
 

@@ -17,6 +17,7 @@ const MIME: Record<string, string> = {
   ".webp": "image/webp",
   ".svg": "image/svg+xml",
   ".pdf": "application/pdf",
+  ".mp4": "video/mp4",
 };
 
 /**
@@ -46,10 +47,10 @@ export async function GET(req: Request) {
     file = optionAssetPath(params.get("date"), params.get("option"), which === "visual" ? "png" : "pdf");
     if (!file) return NextResponse.json({ error: "invalid draft id or option" }, { status: 400 });
   } else if (which === "queue") {
-    // A queued post's candidate image: built from a validated queue id and an integer 1-3.
+    // A queued post's candidate: built from a validated queue id and an integer 1-3 (images) or 4 (video).
     const id = params.get("id");
     const v = Number(params.get("v"));
-    if (!isQueueId(id) || !Number.isInteger(v) || v < 1 || v > 3)
+    if (!isQueueId(id) || !Number.isInteger(v) || v < 1 || v > 4)
       return NextResponse.json({ error: "invalid queue id or image" }, { status: 400 });
     file = variantImagePath(id, v);
   } else return NextResponse.json({ error: "unknown asset" }, { status: 400 });
@@ -59,7 +60,23 @@ export async function GET(req: Request) {
   }
   const ext = path.extname(file).toLowerCase();
   const data = fs.readFileSync(file);
+  // Safari will not play a <video> unless the server answers byte ranges.
+  const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.get("range") ?? "");
+  if (range) {
+    const start = Number(range[1]);
+    const end = Math.min(range[2] ? Number(range[2]) : data.length - 1, data.length - 1);
+    if (start > end) return new NextResponse(null, { status: 416, headers: { "Content-Range": `bytes */${data.length}` } });
+    return new NextResponse(new Uint8Array(data.subarray(start, end + 1)), {
+      status: 206,
+      headers: {
+        "Content-Type": MIME[ext] ?? "application/octet-stream",
+        "Content-Range": `bytes ${start}-${end}/${data.length}`,
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
   return new NextResponse(new Uint8Array(data), {
-    headers: { "Content-Type": MIME[ext] ?? "application/octet-stream", "Cache-Control": "no-store" },
+    headers: { "Content-Type": MIME[ext] ?? "application/octet-stream", "Accept-Ranges": "bytes", "Cache-Control": "no-store" },
   });
 }

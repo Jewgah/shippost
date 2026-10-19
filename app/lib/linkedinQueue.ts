@@ -5,15 +5,17 @@ import { loadConfig } from "./config";
 
 /**
  * The manual LinkedIn post queue. One JSON file per item in `<draftsDir>/.linkedin/<id>.json`,
- * oldest first (FIFO by `createdAt`). Nothing here is scheduled: an item waits until Jordan
- * clicks "Trigger next post" on /queue.
+ * listed oldest first by `createdAt`. Nothing here is scheduled, and any queued item can go out:
+ * it waits until Jordan clicks its "Post" button in the queue panel (top bar).
  *
- * Three writers, each owning its own file, so none ever rewrites another's:
+ * Writers:
  *  - this app writes the item JSON (create, the trigger's `asset`, `picked`);
- *  - app/scripts/linkedin-post.mjs writes the item JSON's `status` while posting (it runs only
- *    after the app's last write for that item, under its own lock);
- *  - engine/render-variants.mjs writes `<id>.render.json` and the images
- *    `<draftsDir>/.visuals/<id>-v{1,2,3}.png`. Images are found by looking, never stored here.
+ *  - app/scripts/linkedin-post.mjs writes the item JSON's `status`, `urn` and follow-up flags
+ *    (under its own lock, re-reading before each write). GET's `picked` write can overlap the
+ *    runner's follow-up writes; both are read-then-write within milliseconds, so this is accepted;
+ *  - engine/render-variants.mjs writes `<id>.render.json`, the clip's props `<id>.clip.json`, and the images
+ *    `<draftsDir>/.visuals/<id>-v{1,2,3}.png`, plus the clip `<id>-v4.mp4` when config `video` is
+ *    set. Candidates are found by looking, never stored here.
  */
 
 export type QueueMode = "personal" | "company";
@@ -28,6 +30,8 @@ export interface QueueItem {
   mode: QueueMode;
   text: string;
   repost: string;
+  /** First comment: on the post (as the page in company mode), and on the repost (as the author). */
+  comment?: string;
   status: QueueStatus;
   asset?: string | null;
   error?: string;
@@ -45,6 +49,9 @@ export interface RenderState {
 }
 
 export const VARIANTS = [1, 2, 3] as const;
+/** The 4th candidate is a video (a marketing-studio clip), picked and posted like an image. */
+export const VIDEO = 4;
+export const CANDIDATES = [...VARIANTS, VIDEO] as const;
 
 /** Item ids are built server-side, but they also arrive in query strings: only this shape is used in a path. */
 export const isQueueId = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{1,120}$/.test(id);
@@ -59,8 +66,8 @@ export function visualsDir(): string {
 
 export const itemPath = (id: string) => path.join(queueDir(), `${id}.json`);
 export const renderStatePath = (id: string) => path.join(queueDir(), `${id}.render.json`);
-/** The candidate image `v` (1-3) of an item. Built from a validated id and an integer only. */
-export const variantImagePath = (id: string, v: number) => path.join(visualsDir(), `${id}-v${v}.png`);
+/** The candidate `v` of an item: images 1-3, the video 4. Built from a validated id and an integer only. */
+export const variantImagePath = (id: string, v: number) => path.join(visualsDir(), `${id}-v${v}.${v === VIDEO ? "mp4" : "png"}`);
 
 export function readItem(id: string): QueueItem | null {
   if (!isQueueId(id)) return null;
@@ -100,10 +107,10 @@ export function nextQueued(items: QueueItem[] = listQueue()): QueueItem | null {
   return items.find((i) => i.status === "queued") ?? null;
 }
 
-/** Which of the 3 candidate images exist on disk right now. */
+/** Which candidates (images 1-3, video 4) exist on disk right now. */
 export function imagesFor(id: string): number[] {
   if (!isQueueId(id)) return [];
-  return VARIANTS.filter((v) => fs.existsSync(variantImagePath(id, v)));
+  return CANDIDATES.filter((v) => fs.existsSync(variantImagePath(id, v)));
 }
 
 export function readRenderState(id: string): RenderState | null {

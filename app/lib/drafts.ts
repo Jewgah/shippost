@@ -1,3 +1,4 @@
+import type { CommentLinks } from "./firstComment";
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
@@ -191,6 +192,8 @@ export interface Status {
   companyMode: boolean;
   /** brand.linkedinPageUrl is set, so "Post to LinkedIn" can target the company page. */
   hasCompanyPage: boolean;
+  /** brand.siteUrl and brand.landingUrl: the default first comment picks one (lib/firstComment.ts). */
+  commentLinks: CommentLinks;
   recentPostCount: number;
 }
 
@@ -213,6 +216,7 @@ export function getStatus(): Status {
     hasAvatar: Boolean(uploadedAvatarPath()),
     companyMode: readSettings().companyMode,
     hasCompanyPage: Boolean(c.brand.linkedinPageUrl),
+    commentLinks: { siteUrl: c.brand.siteUrl, landingUrl: c.brand.landingUrl },
     recentPostCount: recentPostCount(),
   };
 }

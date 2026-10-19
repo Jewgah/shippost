@@ -5,7 +5,7 @@ import { configPath, expandTilde, findRepoRoot } from "./paths";
 
 export interface ShippostConfig {
   author: { name: string; bio: string; portfolioDataDir: string };
-  brand: { name: string; tagline: string; offers: string; vibe: string; logoPath: string; linkedinPageUrl: string };
+  brand: { name: string; tagline: string; offers: string; vibe: string; logoPath: string; linkedinPageUrl: string; siteUrl: string; landingUrl: string };
   scrub: { clientNames: string[]; extraTerms: string[] };
   output: {
     draftsDir: string;
@@ -28,10 +28,18 @@ export interface ShippostConfig {
 }
 
 let cached: ShippostConfig | null = null;
+let cachedMtime = 0;
 
 export function loadConfig(): ShippostConfig {
-  if (cached) return cached;
   const cfgPath = configPath();
+  // Re-read when config.json changes on disk, so an edit shows up without restarting the server.
+  let mtime = 0;
+  try {
+    mtime = fs.statSync(cfgPath).mtimeMs;
+  } catch {
+    /* missing: the read below throws the real error */
+  }
+  if (cached && mtime === cachedMtime) return cached;
   const raw = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
 
   const author = {
@@ -46,6 +54,8 @@ export function loadConfig(): ShippostConfig {
     vibe: raw.brand?.vibe ?? "",
     logoPath: expandTilde(raw.brand?.logoPath ?? ""),
     linkedinPageUrl: raw.brand?.linkedinPageUrl ?? "",
+    siteUrl: raw.brand?.siteUrl ?? "",
+    landingUrl: raw.brand?.landingUrl ?? "",
   };
   const scrub = {
     clientNames: Array.isArray(raw.scrub?.clientNames) ? raw.scrub.clientNames : [],
@@ -80,6 +90,8 @@ export function loadConfig(): ShippostConfig {
       repoRoot: findRepoRoot(),
     },
   };
+  // Only now: a half-saved or broken file throws on every call until fixed, never silently ignored.
+  cachedMtime = mtime;
   return cached;
 }
 

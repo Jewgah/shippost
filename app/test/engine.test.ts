@@ -168,3 +168,32 @@ describe("generate.sh (success path, stub claude)", () => {
     expect(log).toContain("notify: you have not posted in 30 days, 2 drafts waiting");
   }, 20_000);
 });
+
+describe("engine/edit.sh (Generate for company)", () => {
+  // The stub "AI" adds a section D to option 2 only, whatever option it was asked about.
+  const draftBody = "# LinkedIn drafts\n\n## Option 1 \u2014 p \u2014 one   (8/10)\n**A. Company post**\nA1\n\n## Option 2 \u2014 p \u2014 two   (7/10)\n**A. Company post**\nA2\n";
+  let dir: string;
+  let cfg: string;
+  beforeAll(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "shippost-edit-"));
+    const stub = path.join(dir, "claude-stub.sh");
+    fs.writeFileSync(stub, `#!/bin/bash\nprintf '**D. Company page post**\\nD2\\n' >> "$SHIPPOST_EDIT_FILE"\n`);
+    fs.chmodSync(stub, 0o755);
+    cfg = path.join(dir, "config.json");
+    fs.writeFileSync(cfg, JSON.stringify({ author: { name: "T" }, brand: { name: "B" }, output: { draftsDir: dir }, engine: { claudeBin: stub } }));
+  });
+  const edit = (opt: string) => {
+    const file = path.join(dir, `d${opt}.md`);
+    fs.writeFileSync(file, draftBody);
+    try {
+      execFileSync("bash", [path.join(repoRoot, "engine", "edit.sh")], {
+        env: { ...process.env, SHIPPOST_CONFIG: cfg, SHIPPOST_EDIT_FILE: file, SHIPPOST_EDIT_OPTION: opt, SHIPPOST_EDIT_PROMPT: "company", SHIPPOST_EDIT_MODE: "company" },
+      });
+      return 0;
+    } catch (e) {
+      return (e as { status: number }).status;
+    }
+  };
+  it("succeeds when the asked option got its section D", () => expect(edit("2")).toBe(0));
+  it("exits 3 when only ANOTHER option has a section D", () => expect(edit("1")).toBe(3));
+});

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import TopBar from "@/components/TopBar";
 import AuroraBackground from "@/components/AuroraBackground";
 import { loadConfig } from "@/lib/config";
+import { effectiveLogoPath, uploadedAvatarPath } from "@/lib/settings";
 
 export const metadata: Metadata = {
   title: "shippost",
@@ -12,10 +13,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   let theme = "neutral";
   let brandName = "";
+  let who = { hasLogo: false, authorName: "", hasAvatar: false };
   try {
     const c = loadConfig();
     theme = c.app.theme || "neutral";
     brandName = c.brand.name || "";
+    // Not getStatus(): that reads every draft, and the layout runs on every page.
+    who = { hasLogo: Boolean(effectiveLogoPath()), authorName: c.author.name, hasAvatar: Boolean(uploadedAvatarPath()) };
   } catch {
     /* config missing — fall back to defaults */
   }
@@ -33,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <AuroraBackground />
-        <TopBar brandName={brandName} />
+        <TopBar brandName={brandName} {...who} />
         <main className="relative z-10 mx-auto max-w-3xl px-5 py-8">{children}</main>
         <footer className="relative z-10 mx-auto max-w-3xl px-5 pb-10 text-center text-xs text-muted">
           crafted with <span aria-label="love">❤️</span> by{" "}

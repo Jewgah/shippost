@@ -103,6 +103,19 @@ describe("linkedinQueue lib", () => {
     expect(imagesFor("x1")).toEqual([1, 3]);
     expect(imagesFor("../x1")).toEqual([]);
   });
+
+  it("the 4th candidate is the video: an mp4, listed once it exists", async () => {
+    const { imagesFor, variantImagePath, VIDEO } = await import("@/lib/linkedinQueue");
+    fs.mkdirSync(path.join(tmp, ".visuals"), { recursive: true });
+    fs.writeFileSync(path.join(tmp, ".visuals", "x2-v1.png"), "");
+    expect(imagesFor("x2")).toEqual([1]);
+    fs.writeFileSync(path.join(tmp, ".visuals", "x2-v4.tmp.mp4"), ""); // half-written: not a candidate
+    expect(imagesFor("x2")).toEqual([1]);
+    fs.writeFileSync(path.join(tmp, ".visuals", "x2-v4.mp4"), "");
+    expect(imagesFor("x2")).toEqual([1, VIDEO]);
+    expect(variantImagePath("x2", VIDEO)).toBe(path.join(tmp, ".visuals", "x2-v4.mp4"));
+    expect(variantImagePath("x2", 2)).toBe(path.join(tmp, ".visuals", "x2-v2.png"));
+  });
 });
 
 describe("POST /api/linkedin", () => {
@@ -117,6 +130,17 @@ describe("POST /api/linkedin", () => {
     expect(spawned[0]).toContain(created.id);
   });
 
+  it("keeps the first comment, and refuses one over LinkedIn's 1250 characters", async () => {
+    const { POST } = await import("@/app/api/linkedin/route");
+    const ok = await POST(post({ date: DRAFT, option: 1, mode: "personal", text: "hello", comment: "  more here  " }));
+    expect(ok.status).toBe(200);
+    expect(readItem((await ok.json()).item.id)).toMatchObject({ comment: "more here" });
+    spawned.length = 0;
+    const res = await POST(post({ date: DRAFT, option: 1, mode: "personal", text: "hello", comment: "x".repeat(1251) }));
+    expect(res.status).toBe(400);
+    expect(spawned).toHaveLength(0);
+  });
+
   it("refuses company mode while no company page is configured", async () => {
     const { POST } = await import("@/app/api/linkedin/route");
     const res = await POST(post({ date: DRAFT, option: 1, mode: "company", text: "hello" }));
@@ -124,24 +148,31 @@ describe("POST /api/linkedin", () => {
     expect(spawned).toHaveLength(0);
   });
 
-  it("trigger: refuses an item that is not the oldest queued (409), with no spawn and no status change", async () => {
+  it("trigger: any queued post can go out, not only the oldest", async () => {
     const { POST } = await import("@/app/api/linkedin/route");
     writeItem(item("first", "2026-10-14T09:00:00.000Z"));
     writeItem(item("second", "2026-10-14T10:00:00.000Z"));
     const res = await POST(post({ action: "trigger", id: "second", image: null }));
-    expect(res.status).toBe(409);
-    expect(spawned).toHaveLength(0);
+    expect(res.status).toBe(200);
+    expect(spawned).toHaveLength(1);
+    expect(spawned[0]).toContain("second");
     expect(readItem("first").status).toBe("queued");
-    expect(readItem("second").status).toBe("queued");
-    expect(readItem("second").asset).toBeUndefined();
   });
 
-  it("trigger: refuses while images are rendering, and while another post is going out", async () => {
+  it("trigger: a render never blocks it, a not-yet-rendered image does, and so does another post going out", async () => {
     const { POST } = await import("@/app/api/linkedin/route");
     writeItem(item("first", "2026-10-14T09:00:00.000Z"));
-    fs.writeFileSync(path.join(tmp, ".rendering"), "someone");
-    expect((await POST(post({ action: "trigger", id: "first", image: null }))).status).toBe(409);
+    fs.writeFileSync(path.join(queueDir, "first.render.json"), JSON.stringify({ state: "rendering", done: 0, total: 3 }));
+    fs.writeFileSync(path.join(tmp, ".rendering"), "a render is running");
+    // the chosen image is not there yet: refused, nothing started
+    expect((await POST(post({ action: "trigger", id: "first", image: 2 }))).status).toBe(400);
+    expect(spawned).toHaveLength(0);
+    // "No image" goes out even while renders run
+    expect((await POST(post({ action: "trigger", id: "first", image: null }))).status).toBe(200);
+    expect(spawned).toHaveLength(1);
     fs.rmSync(path.join(tmp, ".rendering"));
+    spawned.length = 0;
+    writeItem(item("first", "2026-10-14T09:00:00.000Z"));
     writeItem(item("zero", "2026-10-14T08:00:00.000Z", "posting"));
     fs.writeFileSync(path.join(queueDir, ".lock"), "123"); // the runner is alive
     expect((await POST(post({ action: "trigger", id: "first", image: null }))).status).toBe(409);
@@ -212,6 +243,19 @@ describe("DELETE /api/linkedin", () => {
 
 // The renderer runs for real here (no ComfyUI involved): an unreachable REMOTE engine must fail
 // cleanly, and a render lock someone else holds must be waited for, never touched.
+describe("POST /api/linkedin trigger with the video", () => {
+  it("the video (4) is a valid pick once rendered, anything past it is not", async () => {
+    const { POST } = await import("@/app/api/linkedin/route");
+    writeItem(item("vid", "2026-10-14T09:00:00.000Z"));
+    fs.mkdirSync(path.join(tmp, ".visuals"), { recursive: true });
+    expect((await POST(post({ action: "trigger", id: "vid", image: 5 }))).status).toBe(400);
+    expect((await POST(post({ action: "trigger", id: "vid", image: 4 }))).status).toBe(400); // not rendered yet
+    fs.writeFileSync(path.join(tmp, ".visuals", "vid-v4.mp4"), "");
+    expect((await POST(post({ action: "trigger", id: "vid", image: 4 }))).status).toBe(200);
+    expect(readItem("vid").asset).toBe(path.join(tmp, ".visuals", "vid-v4.mp4"));
+  });
+});
+
 describe("engine/render-variants.mjs", () => {
   const script = path.resolve(__dirname, "..", "..", "engine", "render-variants.mjs");
   const env = () => ({ ...process.env, SHIPPOST_CONFIG: path.join(tmp, "config.json"), SHIPPOST_COMFY_URL: "http://192.0.2.1:9" });
@@ -241,6 +285,18 @@ describe("engine/render-variants.mjs", () => {
     expect(readItem("r1").status).toBe("queued");
   }, 20_000);
 
+  it("is re-runnable: candidates already on disk are kept and reported, nothing is rendered again", async () => {
+    writeItem(item("r3", "2026-10-14T09:00:00.000Z"));
+    fs.mkdirSync(path.join(tmp, ".visuals"), { recursive: true });
+    for (const v of [1, 2, 3]) fs.writeFileSync(path.join(tmp, ".visuals", `r3-v${v}.png`), "keep");
+    // No `video` config: 3 images is everything, so the job ends before touching the engine or the lock.
+    const code = await new Promise((res) => run("r3").on("close", res));
+    expect(code).toBe(0);
+    expect(state("r3")).toEqual({ state: "done", done: 3, total: 3 });
+    expect(fs.readFileSync(path.join(tmp, ".visuals", "r3-v2.png"), "utf8")).toBe("keep");
+    expect(fs.existsSync(path.join(tmp, ".rendering"))).toBe(false);
+  }, 20_000);
+
   it("waits for a fresh lock held by someone else without touching it", async () => {
     writeItem(item("r2", "2026-10-14T09:00:00.000Z"));
     const lock = path.join(tmp, ".rendering");
@@ -256,4 +312,37 @@ describe("engine/render-variants.mjs", () => {
       child.kill();
     }
   }, 20_000);
+});
+
+describe("the LinkedIn browser lock (login window, post, repost)", () => {
+  const lock = () => path.join(queueDir, ".lock");
+
+  it("login: refused cross-site, refused while the browser is busy, started when free", async () => {
+    const { POST } = await import("@/app/api/linkedin/route");
+    const crossSite = new Request("http://localhost/api/linkedin", {
+      method: "POST",
+      headers: { "content-type": "application/json", "sec-fetch-site": "cross-site" },
+      body: JSON.stringify({ action: "login" }),
+    });
+    expect((await POST(crossSite)).status).toBe(403);
+
+    fs.writeFileSync(lock(), "12345");
+    expect((await POST(post({ action: "login" }))).status).toBe(409);
+    expect(spawned).toHaveLength(0);
+
+    fs.rmSync(lock());
+    expect((await POST(post({ action: "login" }))).status).toBe(200);
+    expect(spawned).toHaveLength(1);
+    expect(spawned[0]).toContain("--login");
+  });
+
+  it("trigger: refused while the browser is busy, without starting a runner or touching the item", async () => {
+    const { POST } = await import("@/app/api/linkedin/route");
+    writeItem(item("busy1", "2026-10-14T09:00:00.000Z", "queued", { error: "kept" }));
+    fs.writeFileSync(lock(), "12345");
+    const res = await POST(post({ action: "trigger", id: "busy1", image: null }));
+    expect(res.status).toBe(409);
+    expect(spawned).toHaveLength(0);
+    expect(readItem("busy1")).toMatchObject({ status: "queued", error: "kept" });
+  });
 });

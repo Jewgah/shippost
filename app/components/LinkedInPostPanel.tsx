@@ -1,70 +1,70 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { defaultComment, type CommentLinks } from "@/lib/firstComment";
+import { useEffect, useState } from "react";
 import type { DraftOption } from "@/lib/draftParser";
 
-type Render = { state: "waiting" | "rendering" | "done" | "failed"; done: number; total?: number; error?: string } | null;
-type Item = {
-  id: string;
-  mode: "personal" | "company";
-  status: "queued" | "posting" | "posted" | "failed";
-  position: number | null;
-  images: number[];
-  render: Render;
-  error?: string;
-};
-
+type Render = { state: "waiting" | "rendering" | "done" | "failed"; done: number; total?: number; error?: string; note?: string } | null;
+// Candidates are 3 images, plus a video when config `video` is set (total 4): the label says which.
+const ready = (done: number, total: number | undefined) =>
+  total === 4 ? (done === 4 ? "3 images + video ready" : `${done} of 4 ready`) : `${done} images ready`;
 export function renderLabel(r: Render): string {
   if (!r) return "images: starting";
   if (r.state === "waiting") return "images: waiting for another render";
-  if (r.state === "rendering") return `images: ${r.done}/${r.total ?? 3} rendering`;
-  if (r.state === "done") return r.total === 0 ? "no AI image prompt, text only" : `${r.done} images ready`;
-  return `images failed: ${r.error ?? "unknown error"}`;
+  if (r.state === "rendering" && r.note) return `${r.done}/${r.total ?? 3} done, ${r.note}`;
+  // ~2 min per image measured on this Mac (114-136 s, 2026-10-14), so 0/3 for minutes is normal.
+  if (r.state === "rendering") return `images: ${r.done}/${r.total ?? 3} done, about 2 min each`;
+  if (r.state === "done") return r.total === 0 ? "no AI image prompt, text only" : ready(r.done, r.total);
+  // A failed video still leaves the images (and the reverse): say what is usable.
+  return `${r.done > 0 ? `${ready(r.done, r.total)}, ` : ""}failed: ${r.error ?? "unknown error"}`;
 }
 
 // "Add to queue": put this option in the manual LinkedIn queue. Adding renders its 3 candidate
-// images in the background; posting happens later, one click at a time, from /queue.
+// images (and the video, when config `video` is set) in the background; posting happens later, one click at a time, from the queue dropdown in the top bar.
 export default function LinkedInPostPanel({
   option,
   date,
   companyMode,
   brandName,
   hasCompanyPage,
+  commentLinks = { siteUrl: "", landingUrl: "" },
+  onGenerateCompany,
+  generatingCompany = false,
 }: {
   option: DraftOption;
   date: string;
   companyMode: boolean;
   brandName: string;
   hasCompanyPage: boolean;
+  commentLinks?: CommentLinks;
+  /** Runs "Generate for company" (writes sections D and B into the draft). */
+  onGenerateCompany?: () => void;
+  generatingCompany?: boolean;
 }) {
   // Company page text: section A in company mode, else the "Generate for company" version (D), else A.
   const companyText = companyMode ? option.companyPost : option.companyPage || option.companyPost;
   const [mode, setMode] = useState<"personal" | "company">("personal");
   const [text, setText] = useState(option.companyPost);
   const [repost, setRepost] = useState(option.repostCaption);
+  // Picked per mode (site link, or the Infinify offer on a profile-only Infinify post), still editable.
+  const [comment, setComment] = useState(() => defaultComment(option, "personal", commentLinks));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
+  const [added, setAdded] = useState(false);
+  // Older personal-mode drafts have no company version (D) and no repost caption (B).
+  const missingCompanyVersion = !companyMode && !option.companyPage;
 
-  const load = useCallback(async () => {
-    try {
-      const r = await fetch(`/api/linkedin?date=${encodeURIComponent(date)}&option=${option.n}`, { cache: "no-store" });
-      if (r.ok) setItems((await r.json()).items);
-    } catch {
-      /* transient */
-    }
-  }, [date, option.n]);
-
+  // "Generate for company" rewrote the draft: refill the company fields from the new sections.
   useEffect(() => {
-    load();
-    // Renders take minutes: refresh so progress and "posted" show up without a reload.
-    const t = setInterval(load, 5_000);
-    return () => clearInterval(t);
-  }, [load]);
+    if (mode !== "company") return;
+    setText(companyText);
+    setRepost(option.repostCaption);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [option.companyPage, option.repostCaption]);
 
   const pickMode = (m: "personal" | "company") => {
     setMode(m);
     setText(m === "company" ? companyText : option.companyPost);
+    setComment(defaultComment(option, m, commentLinks));
   };
 
   const submit = async () => {
@@ -74,22 +74,20 @@ export default function LinkedInPostPanel({
       const r = await fetch("/api/linkedin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, option: option.n, mode, text, repost }),
+        body: JSON.stringify({ date, option: option.n, mode, text, repost, comment }),
       });
       const j = await r.json();
       if (!r.ok) setErr(j.error || "Couldn't add it to the queue.");
-      else await load();
+      else {
+        setAdded(true);
+        // The top-bar queue dropdown listens for this, so the new item shows up at once.
+        window.dispatchEvent(new Event("shippost:queue-changed"));
+      }
     } catch (e) {
       setErr(String((e as Error).message));
     } finally {
       setBusy(false);
     }
-  };
-
-  const remove = async (id: string) => {
-    const r = await fetch(`/api/linkedin?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (!r.ok) setErr((await r.json().catch(() => ({}))).error || "Couldn't remove it.");
-    await load();
   };
 
   const field =
@@ -118,6 +116,22 @@ export default function LinkedInPostPanel({
         </label>
       </fieldset>
 
+      {mode === "company" && missingCompanyVersion && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2 text-xs text-muted">
+          <span className="mr-auto">This draft has no {brandName || "company"} version or repost caption yet: below is your personal post.</span>
+          {onGenerateCompany && (
+            <button
+              type="button"
+              onClick={onGenerateCompany}
+              disabled={generatingCompany}
+              className="cursor-pointer rounded-md border border-accent px-2 py-1 font-semibold text-accent transition duration-200 hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:opacity-50"
+            >
+              {generatingCompany ? "Writing it… (1-2 min)" : "Generate the company version + caption"}
+            </button>
+          )}
+        </div>
+      )}
+
       <label className="block">
         <span className="mb-1 block text-xs text-muted">{mode === "company" ? `Post on the ${brandName || "company"} page` : "Post on my profile"}</span>
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} maxLength={3000} className={`${field} resize-y`} />
@@ -130,46 +144,25 @@ export default function LinkedInPostPanel({
         </label>
       )}
 
+      <label className="block">
+        <span className="mb-1 block text-xs text-muted">
+          First comment {mode === "company" ? `(as ${brandName || "the page"} on its post, and as you on your repost)` : "(on your post)"}, empty = none
+        </span>
+        <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} maxLength={1250} className={`${field} resize-y`} />
+      </label>
+
       <div className="flex items-center justify-end">
         <button
           onClick={submit}
-          disabled={busy || !text.trim()}
+          disabled={busy || added || !text.trim()}
           className="min-h-[36px] cursor-pointer rounded-md border border-accent bg-accent/15 px-3 py-1.5 text-xs font-semibold text-accent transition duration-200 hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:opacity-50"
         >
-          {busy ? "Adding…" : "Add to queue (renders 3 images)"}
+          {busy ? "Adding…" : added ? "Added to the queue" : "Add to queue (renders the images)"}
         </button>
       </div>
       {err && <p className="text-xs text-red-400">{err}</p>}
 
-      {items.length > 0 && (
-        <ul className="space-y-1 border-t border-border pt-2 text-xs text-muted">
-          {items.map((i) => (
-            <li key={i.id} className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-fg">{i.status === "queued" && i.position ? `#${i.position} in queue` : i.status}</span>
-              <span>{i.mode === "company" ? `${brandName || "company"} page + repost` : "my profile"}</span>
-              {i.status === "queued" && <span>· {renderLabel(i.render)}</span>}
-              {i.error && (
-                <span className="truncate text-red-400" title={i.error}>
-                  {i.error}
-                </span>
-              )}
-              {(i.status === "queued" || i.status === "failed") && (
-                <button
-                  onClick={() => remove(i.id)}
-                  className="ml-auto cursor-pointer rounded px-1 transition duration-200 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  remove
-                </button>
-              )}
-            </li>
-          ))}
-          <li>
-            <Link href="/queue" className="text-accent hover:underline">
-              Open the queue
-            </Link>
-          </li>
-        </ul>
-      )}
+      {added && <p className="text-xs text-good">Added to the queue (opened at the top right).</p>}
     </div>
   );
 }

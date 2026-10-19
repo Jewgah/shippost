@@ -49,6 +49,16 @@ function spawnDetached(script: string, args: string[], logFile: string, env: Nod
   fs.closeSync(out);
 }
 
+/** The LinkedIn runner holds `.linkedin/.lock` for a whole run (a login window, a post, a repost). */
+function runnerBusy(): boolean {
+  try {
+    return Date.now() - fs.statSync(path.join(queueDir(), ".lock")).mtimeMs < STALE_MS;
+  } catch {
+    return false;
+  }
+}
+const BUSY = "the LinkedIn browser is already open (a login, a post or a repost): wait for it to close";
+
 function renderingNow(): boolean {
   try {
     return Date.now() - fs.statSync(path.join(loadConfig().resolved.draftsDir, ".rendering")).mtimeMs < STALE_MS;
@@ -89,7 +99,19 @@ export async function POST(req: Request) {
   } catch {
     /* validated below */
   }
+  if (b.action === "login") return login();
   return b.action === "trigger" ? trigger(b) : addToQueue(b);
+}
+
+// "Log in to LinkedIn": opens the poster's own browser on the LinkedIn login page, for the user to
+// log in by hand (5 min). The session is kept in ~/.shippost/linkedin-profile; no password is stored.
+function login() {
+  if (listQueue().some((i) => i.status === "posting")) return bad("a post is going out right now, wait for it", 409);
+  // Without this the runner would exit on the lock and the page would claim a window opened.
+  if (runnerBusy()) return bad(BUSY, 409);
+  const { repoRoot } = loadConfig().resolved;
+  spawnDetached(path.join(repoRoot, "app", "scripts", "linkedin-post.mjs"), ["--login"], path.join(queueDir(), "login.log"));
+  return NextResponse.json({ ok: true, started: true });
 }
 
 async function addToQueue(b: Record<string, unknown>) {
@@ -98,11 +120,13 @@ async function addToQueue(b: Record<string, unknown>) {
   const mode = b.mode === "company" ? "company" : b.mode === "personal" ? "personal" : null;
   const text = typeof b.text === "string" ? b.text.trim() : "";
   const repost = typeof b.repost === "string" ? b.repost.trim() : "";
+  const comment = typeof b.comment === "string" ? b.comment.trim() : "";
 
   if (!isDraftId(date) || !validOption(option)) return bad("invalid draft or option");
   if (!mode) return bad("mode must be personal or company");
   if (!text || text.length > 3000) return bad("post text must be 1-3000 characters");
   if (repost.length > 3000) return bad("repost caption is over 3000 characters");
+  if (comment.length > 1250) return bad("the first comment is over 1250 characters (LinkedIn's comment limit)");
 
   const c = loadConfig();
   if (mode === "company" && !c.brand.linkedinPageUrl)
@@ -127,6 +151,7 @@ async function addToQueue(b: Record<string, unknown>) {
     mode,
     text,
     repost: mode === "company" ? repost : "",
+    comment,
     status: "queued",
     createdAt: new Date().toISOString(),
   };
@@ -147,7 +172,7 @@ async function trigger(b: Record<string, unknown>) {
   const id = b.id;
   if (!isQueueId(id)) return bad("invalid id");
   const image = b.image === null || b.image === undefined ? null : Number(b.image);
-  if (image !== null && !(Number.isInteger(image) && image >= 1 && image <= 3)) return bad("image must be 1, 2, 3 or null");
+  if (image !== null && !(Number.isInteger(image) && image >= 1 && image <= 4)) return bad("image must be 1, 2, 3, 4 (the video) or null");
 
   const items = listQueue();
   settleDeadRuns(items);
@@ -155,10 +180,12 @@ async function trigger(b: Record<string, unknown>) {
   if (!item) return bad("no such queue item", 404);
   if (item.status !== "queued") return bad(`this post is ${item.status}, not queued`, 409);
   if (items.some((i) => i.status === "posting")) return bad("a post is being published right now, wait for it", 409);
-  // Strict FIFO: a stale page must never post out of order.
-  if (nextQueued(items)?.id !== id) return bad("this is not the next post in the queue, reload the page", 409);
-  // chromium + a resident ~20 GB flux model swaps the machine (same rule as build-carousel.mjs).
-  if (renderingNow()) return bad("images are still rendering, try again in a minute", 409);
+  // Any queued post can go out, in any order (Jordan, 2026-10-14: "this queue is limiting").
+  // Renders never block a post (Jordan's call, 2026-10-14): it goes out as soon as the image it
+  // uses exists (checked below), or with no image when that was picked. Posting while a render
+  // runs is slower (chromium + a resident ~20 GB flux model swap the machine), never wrong.
+  // A held lock means the spawned runner would exit at once and the item would silently stay queued.
+  if (runnerBusy()) return bad(BUSY, 409);
 
   // The asset path is BUILT here from the validated id and integer, never taken from the client.
   let asset: string | null = null;

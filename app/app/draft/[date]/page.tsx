@@ -45,6 +45,7 @@ export default async function DraftPage({ params }: { params: Promise<{ date: st
         renderedOptions={renderedOptions}
         builtCarousels={builtCarousels}
         hasCompanyPage={status.hasCompanyPage}
+        commentLinks={status.commentLinks}
       />
 
       {draft.footer && (

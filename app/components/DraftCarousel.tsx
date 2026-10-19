@@ -1,4 +1,5 @@
 "use client";
+import type { CommentLinks } from "@/lib/firstComment";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import type { DraftOption } from "@/lib/draftParser";
@@ -18,6 +19,7 @@ export default function DraftCarousel({
   renderedOptions = [],
   builtCarousels = [],
   hasCompanyPage = false,
+  commentLinks,
 }: {
   options: DraftOption[];
   date: string;
@@ -31,6 +33,7 @@ export default function DraftCarousel({
   /** Option numbers whose carousel PDF already exists on disk. */
   builtCarousels?: number[];
   hasCompanyPage?: boolean;
+  commentLinks?: CommentLinks;
 }) {
   const reduce = useReducedMotion();
   const railRef = useRef<HTMLDivElement>(null);
@@ -134,6 +137,7 @@ export default function DraftCarousel({
                 initiallyRendered={renderedOptions.includes(o.n)}
                 hasCarousel={builtCarousels.includes(o.n)}
                 hasCompanyPage={hasCompanyPage}
+                commentLinks={commentLinks}
               />
             </div>
           ))}
