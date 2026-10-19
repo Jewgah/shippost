@@ -347,8 +347,20 @@ async function commentOn(page, urn, text, asPage, label) {
     const box = page.getByRole('textbox', { name: /text editor for creating comment/i }).first();
     await box.waitFor({ timeout: 15_000 });
     await pasteInto(box, text, 'Shift+Enter');
-    const submit = box.locator('xpath=ancestor::*[.//button[@aria-label="Share photo"]][1]').getByRole('button', { name: /^comment$/i }).last();
+    const form = box.locator('xpath=ancestor::*[.//button[@aria-label="Share photo"]][1]');
+    const submit = form.getByRole('button', { name: /^comment$/i }).last();
     await submit.waitFor({ timeout: 15_000 });
+    // A link gets its preview card only if LinkedIn has fetched it BEFORE Comment is clicked: the
+    // first video post's comment (2026-10-19) went out as bare text. The card is looked for in the
+    // comment form (ASSUMED shape: it carries an image or a "preview" class), else a few seconds.
+    if (/https?:\/\//.test(text)) {
+      await form
+        .locator('img, [class*="preview"], [class*="article"]')
+        .first()
+        .waitFor({ timeout: 10_000 })
+        .then(() => page.waitForTimeout(1500))
+        .catch(() => page.waitForTimeout(5_000));
+    }
     if (dryRun) {
       await page.screenshot({ path: join(JOBS_DIR, `${label}.dry-run-comment.png`) });
       log(`dry run: comment typed on ${urn}${asPage ? ` (as ${asPage}, switch cancelled)` : ''}, NOT sent`);
