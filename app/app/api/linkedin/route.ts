@@ -11,6 +11,8 @@ import { recordPick } from "@/lib/voice";
 import { STALE_MS } from "@/lib/runLock";
 import { comfyBaseUrl } from "@/lib/comfy";
 import {
+  attachVideo,
+  attachVideoError,
   cardPath,
   cardsFor,
   imagesFor,
@@ -143,6 +145,12 @@ async function addToQueue(b: Record<string, unknown>) {
   }
   const opt = parseDraft(md).options.find((o) => o.n === option);
   if (!opt) return bad("that option is not in the draft", 404);
+  // The option (or its batch) declares the author's own video: checked before anything is written,
+  // so a bad path is a clear refusal, not a queued post missing its video.
+  if (opt.video) {
+    const err = attachVideoError(opt.video);
+    if (err) return bad(`${err} (fix the _Video:_ line in the draft)`);
+  }
 
   const id = `${date}-o${option}-${crypto.randomBytes(3).toString("hex")}`;
   const item: QueueItem = {
@@ -158,7 +166,15 @@ async function addToQueue(b: Record<string, unknown>) {
     pageComment: mode === "company" ? pageComment : "",
     status: "queued",
     createdAt: new Date().toISOString(),
+    ...(opt.video ? { attachVideo: opt.video } : {}),
   };
+  if (opt.video) {
+    try {
+      attachVideo(id, opt.video);
+    } catch (e) {
+      return bad(`couldn't copy the video: ${(e as Error).message}`, 500);
+    }
+  }
   writeItem(item);
 
   // Adding is the deliberate click that may start ComfyUI, like "Render image". The URL is
@@ -176,7 +192,8 @@ async function trigger(b: Record<string, unknown>) {
   const id = b.id;
   if (!isQueueId(id)) return bad("invalid id");
   const image = b.image === null || b.image === undefined ? null : Number(b.image);
-  if (image !== null && !(Number.isInteger(image) && image >= 1 && image <= 4)) return bad("image must be 1, 2, 3, 4 (the video) or null");
+  if (image !== null && !(Number.isInteger(image) && image >= 1 && image <= 5))
+    return bad("image must be 1, 2, 3, 4 (the clip), 5 (your video) or null");
 
   const items = listQueue();
   settleDeadRuns(items);

@@ -151,6 +151,14 @@ sources (scrubbed): <one short source per option>
 scrubbed: yes (no clients, no secrets)
 ```
 
+**Attached video (optional).** When the author hands you a video file to go with the batch (a demo, a screen recording), declare it on its own line, italic like the other metadata lines:
+
+```
+_Video:_ /absolute/path/to/clip.mp4
+```
+
+Put it inside an option (anywhere in its block, usually under `_Why it works:_`) to attach it to that option, or once before the first option (under the `>` instructions) to attach it to every option that has no line of its own. The app strips the line out of the post text and, when that option is queued, copies the file (never moves it) in as the queue's 5th candidate, shown as "Your video" next to the generated clip. The path must be absolute, an existing `.mp4`, at most 200 MB: anything else is refused when the option is queued. **Only write this line with a path the author gave you; never invent one.**
+
 ## Step 8 — Finish
 
 - **Interactive run (`/shippost`):** tell the author where it saved, that ⭐ is the top pick, and the 3-step publish (post A to the company page → Repost-with-thoughts B to personal → drop C as the first comment). Offer tweaks ("more technical", "shorter", "funnier", "regenerate option 3").

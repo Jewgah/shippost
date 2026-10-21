@@ -53,10 +53,10 @@ export async function GET(req: Request) {
     if (!isQueueId(id) || (kind !== "post" && kind !== "repost")) return NextResponse.json({ error: "invalid queue id or card" }, { status: 400 });
     file = cardPath(id, kind);
   } else if (which === "queue") {
-    // A queued post's candidate: built from a validated queue id and an integer 1-3 (images) or 4 (video).
+    // A queued post's candidate: built from a validated queue id and an integer 1-3 (images), 4 (the clip) or 5 (your video).
     const id = params.get("id");
     const v = Number(params.get("v"));
-    if (!isQueueId(id) || !Number.isInteger(v) || v < 1 || v > 4)
+    if (!isQueueId(id) || !Number.isInteger(v) || v < 1 || v > 5)
       return NextResponse.json({ error: "invalid queue id or image" }, { status: 400 });
     file = variantImagePath(id, v);
   } else return NextResponse.json({ error: "unknown asset" }, { status: 400 });

@@ -26,8 +26,20 @@ type Item = {
 };
 type Queue = { items: Item[]; nextId: string | null; rendering: boolean };
 
-// Mirrors VIDEO in lib/linkedinQueue.ts (server-only, so not importable here).
-const VIDEO = 4;
+// Mirror VIDEO and ATTACHED in lib/linkedinQueue.ts (server-only, so not importable here).
+export const VIDEO = 4;
+export const ATTACHED = 5;
+const isVideo = (v: number | null) => v === VIDEO || v === ATTACHED;
+
+/** What a post goes out with when nothing was clicked: its first image. A video is only ever an explicit pick. */
+export const defaultCandidate = (images: number[]): number | null => images.find((v) => !isVideo(v)) ?? null;
+
+/** The candidate a post uses: the explicit pick when there is one (null = "No image"), else the default. */
+export const chosenCandidate = (images: number[], picks: Record<string, number | null>, id: string): number | null =>
+  id in picks ? picks[id] : defaultCandidate(images);
+
+/** How a candidate is named in an error: "Image 2", "The video", "Your video". */
+export const candidateName = (v: number) => (v === VIDEO ? "The video" : v === ATTACHED ? "Your video" : `Image ${v}`);
 const cardUrl = (id: string, kind: "post" | "repost") => `/api/asset?which=card&id=${encodeURIComponent(id)}&kind=${kind}`;
 const imgUrl = (id: string, v: number) => `/api/asset?which=queue&id=${encodeURIComponent(id)}&v=${v}`;
 const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "");
@@ -56,7 +68,7 @@ export default function QueueBoard({
   const reduce = useReducedMotion();
   const [q, setQ] = useState<Queue | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
-  // Per post: absent = not chosen yet (its first image), null = "no image", n = image n (4 = the video).
+  // Per post: absent = not chosen yet (its first image), null = "no image", n = image n (4 = the clip, 5 = your video).
   const [images, setImages] = useState<Record<string, number | null>>({});
   // Which cards are open. The first queued post opens by default, once.
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -99,8 +111,7 @@ export default function QueueBoard({
   const last = triggered ? items.find((i) => i.id === triggered) : undefined;
   const done = items.filter((i) => i.status === "posted" || i.status === "failed").slice(-8).reverse();
 
-  // The default stays an image: the video is only ever an explicit pick.
-  const chosenFor = (i: Item) => (i.id in images ? images[i.id] : i.images.find((v) => v !== VIDEO) ?? null);
+  const chosenFor = (i: Item) => chosenCandidate(i.images, images, i.id);
   const setErr = (id: string, e: string | null) => setErrs((m) => ({ ...m, [id]: e ?? "" }));
 
   const post = async (i: Item) => {
@@ -108,7 +119,7 @@ export default function QueueBoard({
     const chosen = chosenFor(i);
     // Never fall back to text-only behind the user's back: a picked image that is gone is an error.
     if (chosen !== null && !i.images.includes(chosen)) {
-      setErr(i.id, `${chosen === VIDEO ? "The video" : `Image ${chosen}`} is not available any more. Pick another one, or "No image".`);
+      setErr(i.id, `${candidateName(chosen)} is not available any more. Pick another one, or "No image".`);
       return;
     }
     setBusyId(i.id);
@@ -178,7 +189,8 @@ export default function QueueBoard({
         const chosen = chosenFor(i);
         const rendering = i.render?.state === "rendering" || i.render?.state === "waiting";
         // Nothing chosen yet and no image ready: wait rather than post text-only by accident.
-        const blockedByRender = rendering && !(i.id in images) && i.images.length === 0;
+        // (Your video does not count: it is never the default, so it must not unblock a text-only post.)
+        const blockedByRender = rendering && !(i.id in images) && defaultCandidate(i.images) === null;
         // Between the click and the runner claiming it, the post is still "queued": show it started.
         const starting = triggered === i.id && !posting && !i.error;
         const working = busyId === i.id || starting;
@@ -273,7 +285,11 @@ export default function QueueBoard({
 
                     <div>
                       <div className="mb-2 text-xs text-muted">Image</div>
-                      <div className={`grid gap-2 ${i.images.includes(VIDEO) ? "grid-cols-5" : "grid-cols-4"}`} role="radiogroup" aria-label={`Image or video for ${i.topic}`}>
+                      <div
+                        className={`grid gap-2 ${["grid-cols-4", "grid-cols-5", "grid-cols-6"][[VIDEO, ATTACHED].filter((v) => i.images.includes(v)).length]}`}
+                        role="radiogroup"
+                        aria-label={`Image or video for ${i.topic}`}
+                      >
                         {[1, 2, 3].map((v) =>
                           i.images.includes(v) ? (
                             <button
@@ -295,17 +311,21 @@ export default function QueueBoard({
                             </div>
                           )
                         )}
-                        {/* The video (candidate 4) only shows up once rendered: it exists only when config `video` is set. */}
-                        {i.images.includes(VIDEO) && (
-                          <button
-                            role="radio"
-                            aria-checked={chosen === VIDEO}
-                            onClick={() => setImages((m) => ({ ...m, [i.id]: VIDEO }))}
-                            className={thumb(chosen === VIDEO)}
-                          >
-                            <video src={imgUrl(i.id, VIDEO)} muted loop autoPlay playsInline aria-label="Candidate video" className="aspect-[4/5] w-full object-cover" />
-                            <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 text-[10px] text-white">video</span>
-                          </button>
+                        {/* The clip (4) only shows up once rendered: it exists only when config `video` is set.
+                            Your video (5) only when the option declared one (`_Video:_` in the draft). */}
+                        {([[VIDEO, "video", "Candidate video"], [ATTACHED, "Your video", "Your video"]] as const).map(([v, tag, label]) =>
+                          i.images.includes(v) ? (
+                            <button
+                              key={v}
+                              role="radio"
+                              aria-checked={chosen === v}
+                              onClick={() => setImages((m) => ({ ...m, [i.id]: v }))}
+                              className={thumb(chosen === v)}
+                            >
+                              <video src={imgUrl(i.id, v)} muted loop autoPlay playsInline aria-label={label} className="aspect-[4/5] w-full object-cover" />
+                              <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 text-[10px] text-white">{tag}</span>
+                            </button>
+                          ) : null
                         )}
                         <button
                           role="radio"
@@ -327,8 +347,8 @@ export default function QueueBoard({
                         companyMode={i.mode === "company"}
                         authorName={authorName}
                         hasAvatar={hasAvatar}
-                        imageSrc={chosen !== null && chosen !== VIDEO && i.images.includes(chosen) ? imgUrl(i.id, chosen) : null}
-                        videoSrc={chosen === VIDEO && i.images.includes(VIDEO) ? imgUrl(i.id, VIDEO) : null}
+                        imageSrc={chosen !== null && !isVideo(chosen) && i.images.includes(chosen) ? imgUrl(i.id, chosen) : null}
+                        videoSrc={chosen !== null && isVideo(chosen) && i.images.includes(chosen) ? imgUrl(i.id, chosen) : null}
                       />
                     </div>
 

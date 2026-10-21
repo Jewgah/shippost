@@ -244,11 +244,12 @@ describe("DELETE /api/linkedin", () => {
 // The renderer runs for real here (no ComfyUI involved): an unreachable REMOTE engine must fail
 // cleanly, and a render lock someone else holds must be waited for, never touched.
 describe("POST /api/linkedin trigger with the video", () => {
-  it("the video (4) is a valid pick once rendered, anything past it is not", async () => {
+  it("the video (4) is a valid pick once rendered, 5 only once attached, anything past it is not", async () => {
     const { POST } = await import("@/app/api/linkedin/route");
     writeItem(item("vid", "2026-10-14T09:00:00.000Z"));
     fs.mkdirSync(path.join(tmp, ".visuals"), { recursive: true });
-    expect((await POST(post({ action: "trigger", id: "vid", image: 5 }))).status).toBe(400);
+    expect((await POST(post({ action: "trigger", id: "vid", image: 6 }))).status).toBe(400);
+    expect((await POST(post({ action: "trigger", id: "vid", image: 5 }))).status).toBe(400); // nothing attached
     expect((await POST(post({ action: "trigger", id: "vid", image: 4 }))).status).toBe(400); // not rendered yet
     fs.writeFileSync(path.join(tmp, ".visuals", "vid-v4.mp4"), "");
     expect((await POST(post({ action: "trigger", id: "vid", image: 4 }))).status).toBe(200);

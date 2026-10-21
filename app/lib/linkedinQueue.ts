@@ -15,7 +15,9 @@ import { loadConfig } from "./config";
  *    runner's follow-up writes; both are read-then-write within milliseconds, so this is accepted;
  *  - engine/render-variants.mjs writes `<id>.render.json`, the clip's props `<id>.clip.json`, and the images
  *    `<draftsDir>/.visuals/<id>-v{1,2,3}.png`, plus the clip `<id>-v4.mp4` when config `video` is
- *    set. Candidates are found by looking, never stored here.
+ *    set. Candidates are found by looking, never stored here;
+ *  - attachVideo() (called by POST /api/linkedin when the option declares `_Video:_`) copies the
+ *    author's own video to `<id>-v5.mp4`, and the item records the source path as `attachVideo`.
  */
 
 export type QueueMode = "personal" | "company";
@@ -44,6 +46,8 @@ export interface QueueItem {
   postedAt?: string;
   picked?: boolean;
   reposted?: boolean;
+  /** The author's own video the option declared (`_Video:_`), copied to candidate 5. Provenance only: posting reads the copy. */
+  attachVideo?: string;
 }
 
 export interface RenderState {
@@ -56,7 +60,10 @@ export interface RenderState {
 export const VARIANTS = [1, 2, 3] as const;
 /** The 4th candidate is a video (a marketing-studio clip), picked and posted like an image. */
 export const VIDEO = 4;
-export const CANDIDATES = [...VARIANTS, VIDEO] as const;
+/** The 5th candidate is the author's own video, copied in at queue time (see attachVideo). */
+export const ATTACHED = 5;
+export const CANDIDATES = [...VARIANTS, VIDEO, ATTACHED] as const;
+const isVideoCandidate = (v: number) => v === VIDEO || v === ATTACHED;
 
 /** Item ids are built server-side, but they also arrive in query strings: only this shape is used in a path. */
 export const isQueueId = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{1,120}$/.test(id);
@@ -71,8 +78,54 @@ export function visualsDir(): string {
 
 export const itemPath = (id: string) => path.join(queueDir(), `${id}.json`);
 export const renderStatePath = (id: string) => path.join(queueDir(), `${id}.render.json`);
-/** The candidate `v` of an item: images 1-3, the video 4. Built from a validated id and an integer only. */
-export const variantImagePath = (id: string, v: number) => path.join(visualsDir(), `${id}-v${v}.${v === VIDEO ? "mp4" : "png"}`);
+/** The candidate `v` of an item: images 1-3, the clip 4, the author's video 5. Built from a validated id and an integer only. */
+export const variantImagePath = (id: string, v: number) => path.join(visualsDir(), `${id}-v${v}.${isVideoCandidate(v) ? "mp4" : "png"}`);
+
+/**
+ * The size cap on an attached video. /api/asset reads a candidate whole into memory on every
+ * request (the board's <video> asks for byte ranges repeatedly), so the cap bounds that, and a
+ * LinkedIn feed clip is well under it in practice (the Remotion clip is a few MB).
+ */
+export const ATTACH_MAX_BYTES = 200 * 1024 * 1024;
+
+/** Why `file` cannot be attached, or null when it can: an absolute path to an existing .mp4 file, at most ATTACH_MAX_BYTES. */
+export function attachVideoError(file: string): string | null {
+  if (!file) return "no video path given";
+  if (!path.isAbsolute(file)) return `the video path must be absolute: ${file}`;
+  if (path.extname(file).toLowerCase() !== ".mp4") return `the video must be an .mp4 file: ${file}`;
+  let st: fs.Stats;
+  try {
+    st = fs.statSync(file);
+  } catch {
+    return `the video does not exist: ${file}`;
+  }
+  if (!st.isFile()) return `the video is not a file: ${file}`;
+  if (st.size === 0) return `the video is empty: ${file}`;
+  if (st.size > ATTACH_MAX_BYTES)
+    return `the video is ${Math.ceil(st.size / 1024 / 1024)} MB, over the ${ATTACH_MAX_BYTES / 1024 / 1024} MB limit: ${file}`;
+  return null;
+}
+
+/**
+ * Copy (never move) the author's video to candidate 5 of item `id`. Copied under a temp name and
+ * renamed, so imagesFor never lists half a file. Throws with attachVideoError's message on a bad file.
+ */
+export function attachVideo(id: string, file: string): string {
+  if (!isQueueId(id)) throw new Error("invalid queue id");
+  const err = attachVideoError(file);
+  if (err) throw new Error(err);
+  fs.mkdirSync(visualsDir(), { recursive: true });
+  const dest = variantImagePath(id, ATTACHED);
+  const tmp = path.join(visualsDir(), `${id}-v${ATTACHED}.tmp.mp4`);
+  try {
+    // A copy-on-write clone where the filesystem has one (APFS), a plain copy elsewhere.
+    fs.copyFileSync(file, tmp, fs.constants.COPYFILE_FICLONE);
+    fs.renameSync(tmp, dest);
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+  return dest;
+}
 
 export function readItem(id: string): QueueItem | null {
   if (!isQueueId(id)) return null;
@@ -123,7 +176,7 @@ export function cardsFor(id: string): Record<CardKind, boolean> {
   return { post: fs.existsSync(cardPath(id, "post")), repost: fs.existsSync(cardPath(id, "repost")) };
 }
 
-/** Which candidates (images 1-3, video 4) exist on disk right now. */
+/** Which candidates (images 1-3, clip 4, the author's video 5) exist on disk right now. */
 export function imagesFor(id: string): number[] {
   if (!isQueueId(id)) return [];
   return CANDIDATES.filter((v) => fs.existsSync(variantImagePath(id, v)));

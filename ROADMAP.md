@@ -2,6 +2,16 @@
 
 A running log of notable changes, most recent first.
 
+## feat: a queued post can carry your own video as candidate 5 (2026-10-21)
+
+**Problem:** A queued post could only go out with what the pipeline made for it: three rendered images (1-3) and, when config `video` is set, the generated PostClip (4). A finished video the author already had (a product demo, a screen recording) had no way in, short of posting by hand outside the queue.
+
+**Solution:** A draft declares the video on one italic metadata line, `_Video:_ <absolute path>`, inside an option (that option only) or once before the first option (every option without its own). `draftParser` strips the line before cutting the sections, so it never lands in a post, a comment or the visuals, and a post sentence that merely starts with "Video:" is left alone. Queueing that option validates the file (absolute path, `.mp4`, exists, is a non-empty file, at most 200 MB, the cap justified by `/api/asset` reading a candidate whole into memory on every range request) and refuses with a clear 400 naming the `_Video:_` line otherwise, before anything is written or spawned. A valid file is COPIED (never moved; a copy-on-write clone on APFS) to `<id>-v5.mp4` under a temp name then renamed, and the item records the source as `attachVideo`. The board shows it as a second video thumbnail labelled "Your video" next to the generated clip; it is never the default pick and does not unblock a text-only post while images render. Posting 5 goes through the exact path 4 uses (`asset` built server-side, `.mp4` detected by the runner). The clip (4) is untouched. `edit.sh` keeps the line through AI edits. 13 new tests (230 total).
+
+**Files changed:** app/lib/draftParser.ts, app/lib/linkedinQueue.ts, app/app/api/linkedin/route.ts, app/app/api/asset/route.ts, app/components/QueueBoard.tsx, engine/SKILL.md, engine/edit.sh, app/test/attachVideo.test.ts, app/test/assetRange.test.ts, app/test/linkedinQueue.test.ts, ROADMAP.md
+
+---
+
 ## feat: the Render image button starts ComfyUI itself (2026-09-07)
 
 **Problem:** The render path shipped with one deliberate hole: nothing in the app could start ComfyUI, so with the engine down a click on "Render image" ended in a card that said "Start it with: bash engine/comfy-headless.sh". That is the correct answer for the SCHEDULED path, where a 09:13 cron job on a machine that may be asleep must never decide on its own to load a 17 GB checkpoint (measured: it expands to roughly 24 GB resident and took this machine's swap from 12 GB to 36.4 GB in use). It is the wrong answer for a deliberate click, because clicking the button IS that decision, and handing a person a shell command at the exact moment they asked for an image is the friction the button existed to remove.

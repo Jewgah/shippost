@@ -37,12 +37,13 @@ describe("GET /api/asset?which=queue (video)", () => {
     expect(await tail.text()).toBe("89");
   });
 
-  it("refuses a range past the end, and any candidate number past the video", async () => {
+  it("refuses a range past the end, and any candidate number past your video (5)", async () => {
     const { GET } = await import("@/app/api/asset/route");
     const past = await GET(get("which=queue&id=q1&v=4", "bytes=10-"));
     expect(past.status).toBe(416);
     expect(past.headers.get("content-range")).toBe("bytes */10");
-    expect((await GET(get("which=queue&id=q1&v=5"))).status).toBe(400);
+    expect((await GET(get("which=queue&id=q1&v=5"))).status).toBe(404); // a valid number, no file
+    expect((await GET(get("which=queue&id=q1&v=6"))).status).toBe(400);
     expect((await GET(get("which=queue&id=../q1&v=4"))).status).toBe(400);
   });
 });

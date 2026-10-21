@@ -15,6 +15,8 @@ export interface DraftOption {
   companyPage: string;
   why: string;
   visual: string;
+  /** A video the author supplies (`_Video:_ <absolute path>`): the option's own line, else the batch's. "" when none. */
+  video: string;
   raw: string;
   parsed: boolean;
 }
@@ -23,6 +25,8 @@ export interface Draft {
   date: string | null;
   title: string;
   instruction: string;
+  /** The batch-wide `_Video:_` line (before the first option), "" when none. Every option without its own inherits it. */
+  video: string;
   options: DraftOption[];
   footer: string;
 }
@@ -128,9 +132,30 @@ const A_END_RE = new RegExp(
 const B_END_RE = new RegExp(`${C_HEADER}|${D_HEADER}|^_Why it works:_`, "im");
 const C_START_RE = new RegExp(C_HEADER, "i");
 
-function parseOptionBlock(headerLine: string, body: string[], n: number): DraftOption {
-  const raw = [headerLine, ...body].join("\n").trim();
+// The attached-video declaration: one `_Video:_ <path>` line, italic like the other metadata lines
+// (`_Why it works:_`) so a post sentence that starts with "Video:" is never mistaken for it. The
+// path is taken as written; whether it is usable (absolute, .mp4, exists, size) is decided where it
+// is copied, in lib/linkedinQueue.ts.
+const VIDEO_LINE_RE = /^_Video:_[ \t]*(.*?)[ \t]*$/i;
+
+/** Pull every `_Video:_` line out of `lines`: the last declared path wins, and none stays in the text. */
+function takeVideoLine(lines: string[]): { video: string; rest: string[] } {
+  let video = "";
+  const rest: string[] = [];
+  for (const line of lines) {
+    const m = VIDEO_LINE_RE.exec(line);
+    if (m) video = m[1];
+    else rest.push(line);
+  }
+  return { video, rest };
+}
+
+function parseOptionBlock(headerLine: string, rawBody: string[], n: number, batchVideo = ""): DraftOption {
+  const raw = [headerLine, ...rawBody].join("\n").trim();
   const h = parseHeader(headerLine);
+  // The video line is removed before the sections are cut, wherever it sits, so it never ends up in
+  // a post, a comment or the visuals the user copies.
+  const { video: ownVideo, rest: body } = takeVideoLine(rawBody);
 
   // Sub-section extraction. Humanize ONLY the published post text (A & B).
   const text = body.join("\n");
@@ -152,7 +177,8 @@ function parseOptionBlock(headerLine: string, body: string[], n: number): DraftO
 
   const parsed = h.parsedHeader && companyPost.length > 0;
 
-  return { n, star: h.star, pillar: h.pillar, topic: h.topic, score: h.score, companyPost, repostCaption, firstComment, companyPage, why, visual, raw, parsed };
+  const video = ownVideo || batchVideo;
+  return { n, star: h.star, pillar: h.pillar, topic: h.topic, score: h.score, companyPost, repostCaption, firstComment, companyPage, why, visual, video, raw, parsed };
 }
 
 function stripTrailingRule(s: string): string {
@@ -282,6 +308,7 @@ function splitDraft(md: string): {
   title: string;
   date: string | null;
   instruction: string;
+  video: string;
   blocks: RawBlock[];
   footer: string;
 } {
@@ -335,17 +362,19 @@ function splitDraft(md: string): {
   }
   flush();
 
-  return { title, date, instruction: instruction.join("\n").trim(), blocks, footer: footerLines.join("\n").trim() };
+  const preamble = takeVideoLine(instruction);
+  return { title, date, instruction: preamble.rest.join("\n").trim(), video: preamble.video, blocks, footer: footerLines.join("\n").trim() };
 }
 
 export function parseDraft(md: string): Draft {
-  const { title, date, instruction, blocks, footer } = splitDraft(md);
+  const { title, date, instruction, video, blocks, footer } = splitDraft(md);
   const numbers = assignNumbers(blocks.map((b) => parseHeader(b.header)));
   return {
     date,
     title,
     instruction,
-    options: blocks.map((b, i) => parseOptionBlock(b.header, b.body, numbers[i])),
+    video,
+    options: blocks.map((b, i) => parseOptionBlock(b.header, b.body, numbers[i], video)),
     footer,
   };
 }
