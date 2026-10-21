@@ -243,8 +243,8 @@ if (isMain) {
   const seed = seedArg ? Number(seedArg) : Math.floor(Math.random() * 2 ** 31);
   const outFile = flag(args, '--out-file');
 
-  if (!draftId || !/^\d{4}-\d{2}-\d{2}(_\d{6})?$/.test(draftId)) {
-    console.error('usage: render-visual.mjs --draft <YYYY-MM-DD[_HHMMSS]> --option <N> [--prompt "…"]');
+  if (!draftId || !/^\d{4}-\d{2}-\d{2}(_(\d{6}|(?=.{1,40}$)(?=.*[a-z])[a-z0-9]+(-[a-z0-9]+)*))?$/ /* mirrors app/lib/draftId.ts: date, date_HHMMSS, or date_<product-slug> */.test(draftId)) {
+    console.error('usage: render-visual.mjs --draft <YYYY-MM-DD[_HHMMSS|_slug]> --option <N> [--prompt "…"]');
     process.exit(1);
   }
   if (!Number.isInteger(option) || option < 1 || option > 20) {

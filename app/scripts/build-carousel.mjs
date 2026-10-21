@@ -90,8 +90,8 @@ async function main() {
   const draftId = flag(args, '--draft') ?? positional[0] ?? '';
   const option = Number(flag(args, '--option') ?? positional[1]);
 
-  if (!/^\d{4}-\d{2}-\d{2}(_\d{6})?$/.test(draftId)) {
-    console.error('usage: build-carousel.mjs <YYYY-MM-DD[_HHMMSS]> <option>   (or --draft … --option …)');
+  if (!/^\d{4}-\d{2}-\d{2}(_(\d{6}|(?=.{1,40}$)(?=.*[a-z])[a-z0-9]+(-[a-z0-9]+)*))?$/ /* mirrors app/lib/draftId.ts: date, date_HHMMSS, or date_<product-slug> */.test(draftId)) {
+    console.error('usage: build-carousel.mjs <YYYY-MM-DD[_HHMMSS|_slug]> <option>   (or --draft … --option …)');
     return 1;
   }
   if (!Number.isInteger(option) || option < 1 || option > 20) {
