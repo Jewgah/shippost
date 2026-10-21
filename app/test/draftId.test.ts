@@ -15,9 +15,13 @@ describe("formatDraftId", () => {
 });
 
 describe("isDraftId — format + path-traversal guard", () => {
-  it("accepts a plain date and a timestamped run", () => {
+  it("accepts a plain date, a timestamped run, and a run scoped to one product", () => {
     expect(isDraftId("2026-05-31")).toBe(true);
     expect(isDraftId("2026-05-31_143005")).toBe(true);
+    expect(isDraftId("2026-10-21_stemsplit")).toBe(true);
+    expect(isDraftId("2026-10-21_auto-cut2")).toBe(true);
+    for (const bad of ["2026-10-21_", "2026-10-21_1234567", "2026-10-21_Stemsplit", "2026-10-21_stem.split", "2026-10-21_stem_split", "2026-10-21_-x", `2026-10-21_${"a".repeat(41)}`])
+      expect(isDraftId(bad), bad).toBe(false);
   });
 
   it("rejects path-traversal / absolute / injection attempts", () => {
