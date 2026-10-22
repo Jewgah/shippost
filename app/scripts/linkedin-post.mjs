@@ -154,14 +154,21 @@ const VIDEO_TIMEOUT = 5 * 60_000;
 
 async function attach(page, dialog, file) {
   const chooser = page.waitForEvent('filechooser');
-  await dialog.getByRole('button', { name: /add (a )?(photo|media)/i }).first().click();
+  // "Add a photo" / "Add media" in the dialog composer; "Media" (aria-label) on /sharing/compose.
+  await dialog.getByRole('button', { name: /^media$|add (a )?(photo|media)/i }).first().click();
   await (await chooser).setFiles(file);
-  // The image editor step: "Next" (or "Done") returns to the composer. A video uploads first, so its
-  // button may take minutes to appear (ASSUMED: not yet measured on a real video post).
+  // The dialog composer's editor step ("Next" or "Done") returns to the text; the full-page composer
+  // attaches inline instead (ASSUMED: a <video> or a blob: thumbnail shows up, no button). A video
+  // uploads first, so either may take minutes (ASSUMED: not yet measured on a real video post).
   const timeout = isVideo(file) ? VIDEO_TIMEOUT : 30_000;
   const next = page.getByRole('button', { name: /^(next|done)$/i }).first();
-  await next.waitFor({ timeout });
-  await next.click({ timeout });
+  const inline = dialog.locator('video, img[src^="blob:"]').first();
+  const got = await Promise.race([
+    next.waitFor({ timeout }).then(() => 'next'),
+    inline.waitFor({ timeout }).then(() => 'inline'),
+  ]).catch(() => null);
+  if (got === 'next') await next.click({ timeout });
+  else if (!got) throw new Error(`the media did not attach within ${Math.round(timeout / 1000)} s (${basename(file)})`);
 }
 
 /**
@@ -180,8 +187,17 @@ async function dismissPopups(page) {
   }
 }
 
-/** The post composer: the dialog that holds a text box, never just "the last dialog". */
-const composerOf = (page) => page.locator('[role="dialog"]').filter({ has: page.locator('[contenteditable="true"]') }).last();
+/**
+ * The post composer: the dialog that holds a text box (never just "the last dialog"), or, since
+ * LinkedIn's full-page composer (measured 2026-10-22: "Start a post" navigates to /sharing/compose,
+ * a ProseMirror textbox with no dialog role, the feed still in the DOM behind it), the editor's
+ * nearest container that holds the Post button. The scope matters: the feed has its own buttons.
+ */
+const ON_COMPOSE_PAGE = /\/sharing\/compose/;
+const composerOf = (page) =>
+  ON_COMPOSE_PAGE.test(page.url())
+    ? page.locator('[contenteditable="true"]').first().locator('xpath=ancestor::*[.//button[normalize-space()="Post"]][1]')
+    : page.locator('[role="dialog"]').filter({ has: page.locator('[contenteditable="true"]') }).last();
 
 /**
  * Open the composer. Measured on the HakolKal admin (2026-10-14): "Create" is a <button role="link">,
@@ -197,19 +213,23 @@ async function openComposer(page) {
     .first();
   await opener.click({ timeout: 20_000 });
   // The page admin's "Create" opens a chooser dialog first, where "Start a post" is plain text.
-  // isVisible() never waits, so WAIT for whichever shows up first: the composer or the chooser.
+  // isVisible() never waits, so WAIT for whichever shows up first: the composer, the chooser, or
+  // the navigation to the full-page composer.
   const startPost = page.locator('[role="dialog"]').getByText('Start a post', { exact: true }).first();
   await Promise.race([
     composer.waitFor({ timeout: 15_000 }).catch(() => {}),
     startPost.waitFor({ timeout: 15_000 }).catch(() => {}),
+    page.waitForURL(ON_COMPOSE_PAGE, { timeout: 15_000 }).catch(() => {}),
   ]);
-  if (!(await composer.isVisible()) && (await startPost.isVisible())) await startPost.click();
+  if (!ON_COMPOSE_PAGE.test(page.url()) && !(await composer.isVisible()) && (await startPost.isVisible())) await startPost.click();
+  // Resolved again: the URL may have changed since the locator above was built.
+  const found = composerOf(page);
   try {
-    await composer.waitFor({ timeout: 20_000 });
+    await found.waitFor({ timeout: 20_000 });
   } catch {
     throw new Error(`the post composer did not open on ${page.url()} (a LinkedIn popup or a changed page): see the screenshot`);
   }
-  return composer;
+  return found;
 }
 
 // Set the moment the Post button is clicked. Before it, nothing can have gone out, so a failure
