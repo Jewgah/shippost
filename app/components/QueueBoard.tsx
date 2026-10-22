@@ -387,6 +387,12 @@ export default function QueueBoard({
                       />
                     </div>
 
+                    {/* ponytail: native <details>, closed by default so the card stays one screen tall */}
+                    <details className="group">
+                      <summary className="cursor-pointer select-none text-xs text-muted hover:text-fg">
+                        {i.mode === "company" ? "Comments and repost" : "First comment"} <span className="group-open:hidden">(show)</span>
+                      </summary>
+                      <div className="mt-2 space-y-3">
                     {i.mode === "company" && i.pageComment && (
                       <div>
                         <div className="mb-1 text-xs text-muted">First comment as {brandName || "the page"} on its post</div>
@@ -418,6 +424,8 @@ export default function QueueBoard({
                         )}
                       </div>
                     )}
+                      </div>
+                    </details>
                   </div>
                 </motion.div>
               )}

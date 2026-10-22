@@ -73,9 +73,9 @@ export default function LinkedInPreview({
       </div>
       {imageSrc && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={imageSrc} alt="Attached image" className="block w-full border-t border-black/10" />
+        <img src={imageSrc} alt="Attached image" className="block max-h-56 w-full border-t border-black/10 object-cover object-top" />
       )}
-      {videoSrc && <video src={videoSrc} muted autoPlay loop playsInline controls className="block w-full border-t border-black/10" />}
+      {videoSrc && <video src={videoSrc} muted autoPlay loop playsInline controls className="block max-h-56 w-full border-t border-black/10 object-cover" />}
       <div className="flex items-center justify-around border-t border-black/10 py-1 text-[12px] font-medium text-[#666]">
         <span>👍 Like</span>
         <span>💬 Comment</span>

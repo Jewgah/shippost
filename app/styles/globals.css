@@ -200,3 +200,19 @@ button:disabled,
     scroll-behavior: auto !important;
   }
 }
+
+/* ── LinkedIn queue drawer ── TopBar sets html.queue-open while it is open ── */
+:root {
+  --queue-w: 460px;
+}
+@media (min-width: 1280px) {
+  :root {
+    --queue-w: 560px;
+  }
+  /* ponytail: the header's row, main and footer (all max-w-3xl, mx-auto) recenter in what is left
+     of the viewport: the padding is added to the max width so the content keeps its 48rem */
+  html.queue-open :is(header > div, main, footer) {
+    padding-right: calc(var(--queue-w) + 32px);
+    max-width: calc(48rem + var(--queue-w) + 32px);
+  }
+}

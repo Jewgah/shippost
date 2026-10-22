@@ -47,6 +47,12 @@ export default function TopBar({
     }
   }, []);
   // "Add to queue" on a card opens the dropdown, so the new post (and its renders) is in view.
+  // Wide screens: the open queue pushes the page content left instead of covering it, so the
+  // draft recenters in the space that is left (styles/globals.css, html.queue-open).
+  useEffect(() => {
+    document.documentElement.classList.toggle("queue-open", queueOpen);
+    return () => document.documentElement.classList.remove("queue-open");
+  }, [queueOpen]);
   useEffect(() => {
     const open = () => toggleQueue(true);
     window.addEventListener("shippost:queue-changed", open);
@@ -173,7 +179,7 @@ export default function TopBar({
             ref={queueRef}
             id="queue-dropdown"
             hidden={!queueOpen}
-            className="fixed bottom-4 right-4 top-16 z-30 w-[min(460px,calc(100vw-32px))] overflow-y-auto rounded-2xl border border-border bg-bg p-4 shadow-2xl"
+            className="fixed bottom-4 right-4 top-16 z-30 w-[min(var(--queue-w),calc(100vw-32px))] overflow-y-auto rounded-2xl border border-border bg-bg p-4 shadow-2xl"
           >
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-fg">LinkedIn queue</h2>
