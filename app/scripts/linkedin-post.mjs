@@ -171,6 +171,8 @@ async function attach(page, dialog, file) {
   else if (!got) throw new Error(`the media did not attach within ${Math.round(timeout / 1000)} s (${basename(file)})`);
 }
 
+const DIALOGS = '[role="dialog"], dialog[open]';
+
 /**
  * LinkedIn opens upsell / onboarding popups (e.g. "Reactivate Premium") over the page. They are
  * dialogs too, so they must be closed first, or they get mistaken for the post composer and
@@ -178,12 +180,16 @@ async function attach(page, dialog, file) {
  */
 async function dismissPopups(page) {
   for (let i = 0; i < 3; i++) {
-    const popup = page.locator('[role="dialog"]').filter({ hasNot: page.locator('[contenteditable="true"]') }).first();
+    // Explicit role, or a native <dialog open> (the Premium upsell of 2026-10-22 had no role attribute,
+    // so it intercepted every click on the feed unseen).
+    const popup = page.locator(DIALOGS).filter({ hasNot: page.locator('[contenteditable="true"]') }).first();
     if (!(await popup.isVisible().catch(() => false))) return;
     const close = popup.getByRole('button', { name: /^(dismiss|close)|^not now$|^skip$/i }).first();
     if (await close.isVisible().catch(() => false)) await close.click().catch(() => {});
     else await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
+    // Still there: a native dialog closes itself when asked.
+    if (await popup.isVisible().catch(() => false)) await popup.evaluate((el) => el.close?.()).catch(() => {});
   }
 }
 
@@ -197,7 +203,7 @@ const ON_COMPOSE_PAGE = /\/sharing\/compose/;
 const composerOf = (page) =>
   ON_COMPOSE_PAGE.test(page.url())
     ? page.locator('[contenteditable="true"]').first().locator('xpath=ancestor::*[.//button[normalize-space()="Post"]][1]')
-    : page.locator('[role="dialog"]').filter({ has: page.locator('[contenteditable="true"]') }).last();
+    : page.locator(DIALOGS).filter({ has: page.locator('[contenteditable="true"]') }).last();
 
 /**
  * Open the composer. Measured on the HakolKal admin (2026-10-14): "Create" is a <button role="link">,
@@ -211,11 +217,19 @@ async function openComposer(page) {
     .getByRole('button', { name: /^start a post$|^create$/i })
     .or(page.getByRole('link', { name: /^create$/i }))
     .first();
-  await opener.click({ timeout: 20_000 });
+  try {
+    await opener.click({ timeout: 20_000 });
+  } catch (e) {
+    // A popup that came up after the first sweep (or one the sweep could not close) intercepts the
+    // click: sweep again and retry once before giving up.
+    log(`the "Start a post" click was blocked (${String((e && e.message) || e).split('\n')[0]}): closing popups and retrying`);
+    await dismissPopups(page);
+    await opener.click({ timeout: 15_000 });
+  }
   // The page admin's "Create" opens a chooser dialog first, where "Start a post" is plain text.
   // isVisible() never waits, so WAIT for whichever shows up first: the composer, the chooser, or
   // the navigation to the full-page composer.
-  const startPost = page.locator('[role="dialog"]').getByText('Start a post', { exact: true }).first();
+  const startPost = page.locator(DIALOGS).getByText('Start a post', { exact: true }).first();
   await Promise.race([
     composer.waitFor({ timeout: 15_000 }).catch(() => {}),
     startPost.waitFor({ timeout: 15_000 }).catch(() => {}),
