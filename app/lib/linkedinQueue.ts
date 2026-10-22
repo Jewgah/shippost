@@ -44,6 +44,11 @@ export interface QueueItem {
   error?: string;
   createdAt: string;
   postedAt?: string;
+  startedAt?: string;
+  urn?: string;
+  repostUrn?: string | null;
+  commented?: boolean;
+  repostCommented?: boolean;
   picked?: boolean;
   reposted?: boolean;
   /** The author's own video the option declared (`_Video:_`), copied to candidate 5. Provenance only: posting reads the copy. */

@@ -448,6 +448,8 @@ async function clickUnstable(page, locator) {
   try {
     await locator.click({ timeout: 5_000 });
   } catch {
+    // A popup that came up meanwhile is the usual blocker (an upsell <dialog> over the post, 2026-10-22).
+    await dismissPopups(page);
     const box = await locator.boundingBox();
     if (!box) throw new Error(`${locator} is not on screen`);
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);

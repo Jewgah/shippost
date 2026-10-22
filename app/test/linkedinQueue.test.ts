@@ -262,6 +262,24 @@ describe("POST /api/linkedin mode switch", () => {
   });
 });
 
+describe("POST /api/linkedin requeue and followups", () => {
+  it("requeue: a posted or failed item goes back to the queue without its run state; followups: runs the poster's follow-ups only", async () => {
+    const { POST } = await import("@/app/api/linkedin/route");
+    writeItem(item("p1", "2026-10-14T09:00:00.000Z", "posted", { urn: "urn:li:share:1", postedAt: "x", commented: true, error: "repost: blocked", asset: "/a.png" }));
+    writeItem(item("q1", "2026-10-14T09:00:00.000Z"));
+    expect((await POST(post({ action: "followups", id: "q1" }))).status).toBe(409);
+    expect((await POST(post({ action: "followups", id: "p1" }))).status).toBe(200);
+    expect(spawned).toHaveLength(1);
+    expect(spawned[0].slice(-2)).toEqual(["--followups", "p1"]);
+    expect((await POST(post({ action: "requeue", id: "q1" }))).status).toBe(409);
+    expect((await POST(post({ action: "requeue", id: "p1" }))).status).toBe(200);
+    const back = readItem("p1");
+    expect(back.status).toBe("queued");
+    for (const k of ["urn", "postedAt", "commented", "error", "asset"]) expect(back[k], k).toBeUndefined();
+    expect(back.text).toBe("post p1");
+  });
+});
+
 describe("POST /api/linkedin trigger with the video", () => {
   it("the video (4) is a valid pick once rendered, 5 only once attached, anything past it is not", async () => {
     const { POST } = await import("@/app/api/linkedin/route");

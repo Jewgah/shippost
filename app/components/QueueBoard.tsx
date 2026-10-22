@@ -20,6 +20,7 @@ type Item = {
   createdAt: string;
   postedAt?: string;
   reposted?: boolean;
+  urn?: string;
   images: number[];
   cards?: { post: boolean; repost: boolean };
   render: Render;
@@ -153,6 +154,15 @@ export default function QueueBoard({
     setErr(id, null);
     const r = await fetch("/api/linkedin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mode", id, mode }) });
     if (!r.ok) setErr(id, (await r.json().catch(() => ({}))).error || "Couldn't switch the mode.");
+    await load();
+  };
+
+  // Recent: run the follow-ups still missing on a posted item, or put a posted/failed one back in the queue.
+  const act = async (id: string, action: "followups" | "requeue") => {
+    setErr(id, null);
+    const r = await fetch("/api/linkedin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, id }) });
+    if (!r.ok) setErr(id, (await r.json().catch(() => ({}))).error || "Couldn't do that.");
+    else if (action === "followups") setTriggered(id);
     await load();
   };
 
@@ -430,14 +440,34 @@ export default function QueueBoard({
                     {i.error}
                   </span>
                 )}
-                {i.status === "failed" && (
+                <span className="ml-auto flex items-center gap-2">
+                  {i.status === "posted" && i.error && (
+                    <button
+                      onClick={() => act(i.id, "followups")}
+                      disabled={Boolean(posting)}
+                      title="Runs only what is missing (repost, comments). Never posts again."
+                      className="cursor-pointer rounded px-1 text-xs text-accent transition duration-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:opacity-50"
+                    >
+                      finish follow-ups
+                    </button>
+                  )}
                   <button
-                    onClick={() => remove(i.id)}
-                    className="ml-auto cursor-pointer rounded px-1 text-xs text-muted transition duration-200 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    onClick={() => act(i.id, "requeue")}
+                    title={i.status === "posted" ? "Posts it AGAIN: delete the LinkedIn post first." : "Back to the queue, images and video kept."}
+                    className="cursor-pointer rounded px-1 text-xs text-muted transition duration-200 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
-                    remove
+                    back to queue
                   </button>
-                )}
+                  {i.status === "failed" && (
+                    <button
+                      onClick={() => remove(i.id)}
+                      className="cursor-pointer rounded px-1 text-xs text-muted transition duration-200 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      remove
+                    </button>
+                  )}
+                </span>
+                {errs[i.id] && <span className="w-full text-xs text-red-400">{errs[i.id]}</span>}
               </li>
             ))}
           </ul>

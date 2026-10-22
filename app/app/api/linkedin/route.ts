@@ -106,6 +106,8 @@ export async function POST(req: Request) {
   }
   if (b.action === "login") return login();
   if (b.action === "mode") return switchMode(b);
+  if (b.action === "requeue") return requeue(b);
+  if (b.action === "followups") return followups(b);
   return b.action === "trigger" ? trigger(b) : addToQueue(b);
 }
 
@@ -223,6 +225,35 @@ function switchMode(b: Record<string, unknown>) {
     writeItem({ ...item, mode, text: opt.companyPost, repost: "", comment: defaultComment(opt, "personal", links), pageComment: "" });
   }
   return NextResponse.json({ ok: true, item: readItem(id) });
+}
+
+/**
+ * Put a posted or failed item back in the queue, keeping its rendered candidates. For a posted
+ * item this means posting it AGAIN: the user deletes the LinkedIn post first (the card says so).
+ */
+function requeue(b: Record<string, unknown>) {
+  const id = b.id;
+  if (!isQueueId(id)) return bad("invalid id");
+  const item = readItem(id);
+  if (!item) return bad("no such queue item", 404);
+  if (item.status !== "posted" && item.status !== "failed") return bad(`this post is ${item.status}: only a posted or failed one goes back`, 409);
+  const { urn, postedAt, startedAt, commented, reposted, repostCommented, repostUrn, error, asset, postCard, repostCard, ...rest } = item as QueueItem & Record<string, unknown>;
+  void [urn, postedAt, startedAt, commented, reposted, repostCommented, repostUrn, error, asset, postCard, repostCard];
+  writeItem({ ...(rest as QueueItem), status: "queued" });
+  return NextResponse.json({ ok: true, item: readItem(id) });
+}
+
+/** Run only the follow-ups still missing on a posted item (repost, comments): never posts again. */
+function followups(b: Record<string, unknown>) {
+  const id = b.id;
+  if (!isQueueId(id)) return bad("invalid id");
+  const item = readItem(id);
+  if (!item) return bad("no such queue item", 404);
+  if (item.status !== "posted" || !item.urn) return bad("only a posted item has follow-ups to finish", 409);
+  if (runnerBusy()) return bad(BUSY, 409);
+  const { repoRoot } = loadConfig().resolved;
+  spawnDetached(path.join(repoRoot, "app", "scripts", "linkedin-post.mjs"), ["--followups", id], path.join(queueDir(), `${id}.log`));
+  return NextResponse.json({ ok: true, started: true, id });
 }
 
 async function trigger(b: Record<string, unknown>) {
