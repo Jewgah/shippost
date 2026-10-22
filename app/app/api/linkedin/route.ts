@@ -218,8 +218,8 @@ function switchMode(b: Record<string, unknown>) {
   if (!opt) return bad("that option is no longer in the draft", 404);
   const links = { siteUrl: c.brand.siteUrl, landingUrl: c.brand.landingUrl, companyUrl: c.brand.companyUrl };
   if (mode === "company") {
-    if (!opt.companyPage.trim())
-      return bad('this option has no company-page version yet: open the draft, click "Generate for company" on it, then switch again', 409);
+    // needsCompany: the queue card offers its own "Generate for company" button on this answer.
+    if (!opt.companyPage.trim()) return NextResponse.json({ error: "this option has no company-page version yet", needsCompany: true }, { status: 409 });
     writeItem({ ...item, mode, text: opt.companyPage, repost: opt.repostCaption, comment: defaultComment(opt, "company", links), pageComment: defaultPageComment(links) });
   } else {
     writeItem({ ...item, mode, text: opt.companyPost, repost: "", comment: defaultComment(opt, "personal", links), pageComment: "" });

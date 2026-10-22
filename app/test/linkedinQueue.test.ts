@@ -260,6 +260,22 @@ describe("POST /api/linkedin mode switch", () => {
     expect((await POST(post({ action: "mode", id: "done", mode: "personal" }))).status).toBe(409);
     expect((await POST(post({ action: "mode", id: "sw", mode: "sideways" }))).status).toBe(400);
   });
+
+  it("with a page configured but no section D, answers needsCompany so the queue offers to generate it", async () => {
+    const { POST } = await import("@/app/api/linkedin/route");
+    const cfgPath = process.env.SHIPPOST_CONFIG!;
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
+    fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, brand: { ...cfg.brand, linkedinPageUrl: "https://www.linkedin.com/company/b/" } }));
+    try {
+      writeItem(item("sw2", "2026-10-14T09:00:00.000Z", "queued"));
+      const r = await POST(post({ action: "mode", id: "sw2", mode: "company" }));
+      expect(r.status).toBe(409);
+      expect(await r.json()).toMatchObject({ needsCompany: true });
+      expect(readItem("sw2").mode).toBe("personal");
+    } finally {
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg));
+    }
+  });
 });
 
 describe("POST /api/linkedin requeue and followups", () => {

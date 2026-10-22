@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import Link from "next/link";
 import LinkedInPreview from "./LinkedInPreview";
 import { renderLabel } from "./LinkedInPostPanel";
 
@@ -75,6 +76,8 @@ export default function QueueBoard({
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errs, setErrs] = useState<Record<string, string>>({});
+  // Items whose draft option has no company-page version yet: the card offers to generate it.
+  const [needCompany, setNeedCompany] = useState<Record<string, "offer" | "running">>({});
   const [triggered, setTriggered] = useState<string | null>(null);
   const [loginNote, setLoginNote] = useState<string | null>(null);
 
@@ -152,9 +155,41 @@ export default function QueueBoard({
   // Switch a queued post between your profile only and the page + repost: the texts come from the draft.
   const setMode = async (id: string, mode: "personal" | "company") => {
     setErr(id, null);
+    setNeedCompany(({ [id]: _, ...n }) => n);
     const r = await fetch("/api/linkedin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mode", id, mode }) });
-    if (!r.ok) setErr(id, (await r.json().catch(() => ({}))).error || "Couldn't switch the mode.");
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      if (j.needsCompany) setNeedCompany((n) => ({ ...n, [id]: "offer" }));
+      else setErr(id, j.error || "Couldn't switch the mode.");
+    }
     await load();
+  };
+
+  // "Generate for company" from the queue: the same rewrite as on the draft (section D), then the
+  // switch to company mode runs by itself once it lands.
+  const generateCompany = async (i: Item) => {
+    setErr(i.id, null);
+    setNeedCompany((n) => ({ ...n, [i.id]: "running" }));
+    const fail = (msg: string) => {
+      setNeedCompany((n) => ({ ...n, [i.id]: "offer" }));
+      setErr(i.id, msg);
+    };
+    try {
+      const r = await fetch("/api/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: i.draft, option: i.option, company: true }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.started === false) return fail(j.error || (j.running ? "Another generation is running: try again in a minute." : "Couldn't start it."));
+      // ponytail: poll the shared run state, same as the draft page's button
+      for (;;) {
+        await new Promise((res) => setTimeout(res, 3000));
+        const s = await (await fetch("/api/generate", { cache: "no-store" })).json().catch(() => ({ running: true }));
+        if (s.running) continue;
+        if (!s.lastResult?.ok) return fail(s.lastResult?.error || "The rewrite failed: see drafts/.run.log");
+        break;
+      }
+    } catch (e) {
+      return fail(String((e as Error).message));
+    }
+    await setMode(i.id, "company");
   };
 
   // Recent: run the follow-ups still missing on a posted item, or put a posted/failed one back in the queue.
@@ -280,6 +315,12 @@ export default function QueueBoard({
                           Remove
                         </button>
                       )}
+                      <Link
+                        href={`/draft/${encodeURIComponent(i.draft)}?option=${i.option}`}
+                        className="min-h-[44px] cursor-pointer rounded-lg px-3 py-2 text-sm leading-7 text-muted transition duration-200 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        Open the draft
+                      </Link>
                       <span className="text-xs text-muted">
                         {posting && posting.id !== i.id
                           ? "Another post is going out: one at a time."
@@ -305,6 +346,24 @@ export default function QueueBoard({
                         </button>
                       ))}
                     </div>
+                    {needCompany[i.id] && (
+                      <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                        {needCompany[i.id] === "running" ? (
+                          <span>Writing the {brandName || "company"} page version (about a minute)…</span>
+                        ) : (
+                          <>
+                            <span>No {brandName || "company"} page version of this option yet.</span>
+                            <button
+                              type="button"
+                              onClick={() => generateCompany(i)}
+                              className="cursor-pointer rounded-full border border-accent px-3 py-1 text-accent transition hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            >
+                              Generate for {brandName || "company"}
+                            </button>
+                          </>
+                        )}
+                      </p>
+                    )}
                     {errs[i.id] && <p className="text-xs text-red-400">{errs[i.id]}</p>}
                     {i.error && (
                       <p className="rounded-lg border border-red-400/40 p-2 text-xs text-red-300">
