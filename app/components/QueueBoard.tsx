@@ -148,6 +148,14 @@ export default function QueueBoard({
     setLoginNote(r.ok ? "A browser window opened on LinkedIn: log in there (5 min), it closes by itself once you are in." : j.error || "Couldn't open the login window.");
   };
 
+  // Switch a queued post between your profile only and the page + repost: the texts come from the draft.
+  const setMode = async (id: string, mode: "personal" | "company") => {
+    setErr(id, null);
+    const r = await fetch("/api/linkedin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mode", id, mode }) });
+    if (!r.ok) setErr(id, (await r.json().catch(() => ({}))).error || "Couldn't switch the mode.");
+    await load();
+  };
+
   const remove = async (id: string) => {
     const r = await fetch(`/api/linkedin?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     if (!r.ok) setErr(id, (await r.json().catch(() => ({}))).error || "Couldn't remove it.");
@@ -207,7 +215,7 @@ export default function QueueBoard({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-fg">{i.topic}</span>
                 <span className="block text-xs text-muted">
-                  {i.mode === "company" ? `${brandName || "company"} page + repost` : "your profile"} · {renderLabel(i.render)}
+                  {i.mode === "company" ? `${brandName || "company"} page, then a repost on your profile` : "your profile only"} · {renderLabel(i.render)}
                 </span>
               </span>
               <motion.svg
@@ -269,6 +277,23 @@ export default function QueueBoard({
                             ? 'Its images are still rendering. Wait, or pick "No image".'
                             : ""}
                       </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs" role="radiogroup" aria-label={`Where ${i.topic} goes`}>
+                      <span className="text-muted">Goes to</span>
+                      {(["personal", "company"] as const).map((m) => (
+                        <button
+                          key={m}
+                          role="radio"
+                          aria-checked={i.mode === m}
+                          disabled={working || i.mode === m}
+                          onClick={() => setMode(i.id, m)}
+                          className={`cursor-pointer rounded-full border px-3 py-1 transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default ${
+                            i.mode === m ? "border-accent bg-accent/15 text-accent" : "border-border text-muted hover:border-accent/60"
+                          }`}
+                        >
+                          {m === "personal" ? "Your profile only" : `${brandName || "Company"} page + repost`}
+                        </button>
+                      ))}
                     </div>
                     {errs[i.id] && <p className="text-xs text-red-400">{errs[i.id]}</p>}
                     {i.error && (

@@ -243,6 +243,25 @@ describe("DELETE /api/linkedin", () => {
 
 // The renderer runs for real here (no ComfyUI involved): an unreachable REMOTE engine must fail
 // cleanly, and a render lock someone else holds must be waited for, never touched.
+describe("POST /api/linkedin mode switch", () => {
+  it("rewrites a queued item from the draft, refuses company without a page version, keeps candidates", async () => {
+    const { POST } = await import("@/app/api/linkedin/route");
+    writeItem(item("sw", "2026-10-14T09:00:00.000Z", "queued", { text: "edited by hand", comment: "c" }));
+    fs.mkdirSync(path.join(tmp, ".visuals"), { recursive: true });
+    fs.writeFileSync(path.join(tmp, ".visuals", "sw-v1.png"), "");
+    // The fixture draft has no section D and no company page configured.
+    expect((await POST(post({ action: "mode", id: "sw", mode: "company" }))).status).toBe(400);
+    expect(readItem("sw").text).toBe("edited by hand");
+    const r = await POST(post({ action: "mode", id: "sw", mode: "personal" }));
+    expect(r.status).toBe(200);
+    expect(readItem("sw")).toMatchObject({ mode: "personal", text: "I built a queue.", repost: "", pageComment: "" });
+    expect(fs.existsSync(path.join(tmp, ".visuals", "sw-v1.png"))).toBe(true);
+    writeItem(item("done", "2026-10-14T09:00:00.000Z", "posted"));
+    expect((await POST(post({ action: "mode", id: "done", mode: "personal" }))).status).toBe(409);
+    expect((await POST(post({ action: "mode", id: "sw", mode: "sideways" }))).status).toBe(400);
+  });
+});
+
 describe("POST /api/linkedin trigger with the video", () => {
   it("the video (4) is a valid pick once rendered, 5 only once attached, anything past it is not", async () => {
     const { POST } = await import("@/app/api/linkedin/route");

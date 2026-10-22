@@ -7,6 +7,7 @@ import { loadConfig } from "@/lib/config";
 import { blockCrossSite } from "@/lib/guard";
 import { isDraftId } from "@/lib/draftId";
 import { parseDraft } from "@/lib/draftParser";
+import { defaultComment, defaultPageComment } from "@/lib/firstComment";
 import { recordPick } from "@/lib/voice";
 import { STALE_MS } from "@/lib/runLock";
 import { comfyBaseUrl } from "@/lib/comfy";
@@ -104,6 +105,7 @@ export async function POST(req: Request) {
     /* validated below */
   }
   if (b.action === "login") return login();
+  if (b.action === "mode") return switchMode(b);
   return b.action === "trigger" ? trigger(b) : addToQueue(b);
 }
 
@@ -186,6 +188,41 @@ async function addToQueue(b: Record<string, unknown>) {
     { ...process.env, SHIPPOST_COMFY_URL: comfyBaseUrl() }
   );
   return NextResponse.json({ ok: true, item });
+}
+
+/**
+ * Switch a queued item between "personal" (the post on the author's profile) and "company" (the
+ * page post, then a repost with its caption on the profile): the texts and comments are re-read
+ * from the draft option, the rendered candidates stay. Company needs the option's page version
+ * (section D) and a repost caption (B): "Generate for company" on the draft writes both.
+ */
+function switchMode(b: Record<string, unknown>) {
+  const id = b.id;
+  if (!isQueueId(id)) return bad("invalid id");
+  const mode = b.mode === "company" ? "company" : b.mode === "personal" ? "personal" : null;
+  if (!mode) return bad("mode must be personal or company");
+  const item = readItem(id);
+  if (!item) return bad("no such queue item", 404);
+  if (item.status !== "queued") return bad(`this post is ${item.status}, not queued`, 409);
+  const c = loadConfig();
+  if (mode === "company" && !c.brand.linkedinPageUrl) return bad("set brand.linkedinPageUrl in config.json to post as the company");
+  let md: string;
+  try {
+    md = fs.readFileSync(path.join(c.resolved.draftsDir, `${item.draft}.md`), "utf8");
+  } catch {
+    return bad("the draft is gone", 404);
+  }
+  const opt = parseDraft(md).options.find((o) => o.n === item.option);
+  if (!opt) return bad("that option is no longer in the draft", 404);
+  const links = { siteUrl: c.brand.siteUrl, landingUrl: c.brand.landingUrl, companyUrl: c.brand.companyUrl };
+  if (mode === "company") {
+    if (!opt.companyPage.trim())
+      return bad('this option has no company-page version yet: open the draft, click "Generate for company" on it, then switch again', 409);
+    writeItem({ ...item, mode, text: opt.companyPage, repost: opt.repostCaption, comment: defaultComment(opt, "company", links), pageComment: defaultPageComment(links) });
+  } else {
+    writeItem({ ...item, mode, text: opt.companyPost, repost: "", comment: defaultComment(opt, "personal", links), pageComment: "" });
+  }
+  return NextResponse.json({ ok: true, item: readItem(id) });
 }
 
 async function trigger(b: Record<string, unknown>) {
