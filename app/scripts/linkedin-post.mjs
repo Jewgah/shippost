@@ -482,27 +482,38 @@ async function repost(page, job, urn) {
   // Measured 2026-10-23 06:38: 40 s after a video post went out, the Repost menu never showed the
   // entry (ASSUMED: LinkedIn still processing the video; the same step passes on older posts).
   // Look at what the menu holds, then reload and try again, up to ~2 min in all.
-  const waits = [5_000, 10_000, 20_000, 30_000, 45_000];
-  for (let attempt = 0; ; attempt++) {
-    await clickUnstable(page, page.getByRole('button', { name: /^repost$/i }).first());
-    if (await withThoughts.waitFor({ timeout: 5_000 }).then(() => true, () => false)) break;
-    const items = await page.locator('[role="menu"], [role="menuitem"], [role="listbox"], [role="option"]').allInnerTexts().catch(() => []);
-    const menu = items.map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean).join(' / ') || 'no menu open';
-    log(`repost: the menu did not show "Repost with thoughts" (try ${attempt + 1}; seen: ${menu})`);
-    await page.screenshot({ path: join(JOBS_DIR, `${job.id}.repost-menu.png`) }).catch(() => {});
-    if (attempt >= waits.length) throw new Error(`the Repost menu did not offer "Repost with thoughts" (seen: ${menu}); see ${job.id}.repost-menu.png`);
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(waits[attempt]);
-    await page.reload(); // the identity chosen on this post is remembered across a reload
-    await dismissPopups(page);
-  }
-  await clickUnstable(page, withThoughts);
   // The modal's editor renders a moment after the menu click, while the post's own comment box
   // ("Text editor for creating comment") is there all along: "the last visible textbox" picked that
   // one whenever the modal was slow (measured 2026-10-23, 0 of 175 characters landed). Wait for a
   // textbox that is not the comment box.
   const editor = page.locator('[contenteditable="true"]:not([aria-label*="comment" i])').filter({ visible: true }).last();
-  await editor.waitFor({ timeout: 15_000 });
+  const waits = [5_000, 10_000, 20_000, 30_000, 45_000];
+  for (let attempt = 0; ; attempt++) {
+    await clickUnstable(page, page.getByRole('button', { name: /^repost$/i }).first());
+    if (await withThoughts.waitFor({ timeout: 5_000 }).then(() => true, () => false)) {
+      // A normal click first (it waits for the menu to finish sliding in: a coordinate click taken
+      // too early misses), then its coordinates: on a video post the entry re-renders every tick, so
+      // the normal click never gets "stable". No popup sweep here: its Escape closed the menu (07:37, 2026-10-23).
+      try {
+        await withThoughts.click({ timeout: 3_000 });
+      } catch {
+        const box = await withThoughts.boundingBox().catch(() => null);
+        if (box) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      }
+      if (await editor.waitFor({ timeout: 10_000 }).then(() => true, () => false)) break;
+      log(`repost: the "Repost with thoughts" modal did not open (try ${attempt + 1})`);
+    } else {
+      const items = await page.locator('[role="menu"], [role="menuitem"], [role="listbox"], [role="option"]').allInnerTexts().catch(() => []);
+      const menu = items.map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean).join(' / ') || 'no menu open';
+      log(`repost: the menu did not show "Repost with thoughts" (try ${attempt + 1}; seen: ${menu})`);
+    }
+    await page.screenshot({ path: join(JOBS_DIR, `${job.id}.repost-menu.png`) }).catch(() => {});
+    if (attempt >= waits.length) throw new Error(`could not open "Repost with thoughts" on the post (${waits.length + 1} tries); see ${job.id}.repost-menu.png and the log`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(waits[attempt]);
+    await page.reload(); // the identity chosen on this post is remembered across a reload
+    await dismissPopups(page);
+  }
   if (process.env.SHIPPOST_LINKEDIN_DEBUG) {
     const boxes = await page.locator('[contenteditable="true"]').evaluateAll((els) => els.map((el) => ({ label: el.getAttribute('aria-label'), dialog: el.closest('dialog, [role="dialog"]')?.tagName ?? null, visible: el.getClientRects().length > 0 })));
     log(`repost: text boxes ${JSON.stringify(boxes)}`);
