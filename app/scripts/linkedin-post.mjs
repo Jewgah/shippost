@@ -478,8 +478,25 @@ async function repost(page, job, urn) {
   await page.goto(`https://www.linkedin.com/feed/update/${urn}/`);
   await dismissPopups(page);
   await actAs(page, null); // the repost is the member's, whatever identity was last used on this post
-  await clickUnstable(page, page.getByRole('button', { name: /^repost$/i }).first());
-  await clickUnstable(page, page.getByText(/^repost with (your )?thoughts$/i).first());
+  const withThoughts = page.getByText(/^repost with (your )?thoughts$/i).first();
+  // Measured 2026-10-23 06:38: 40 s after a video post went out, the Repost menu never showed the
+  // entry (ASSUMED: LinkedIn still processing the video; the same step passes on older posts).
+  // Look at what the menu holds, then reload and try again, up to ~2 min in all.
+  const waits = [5_000, 10_000, 20_000, 30_000, 45_000];
+  for (let attempt = 0; ; attempt++) {
+    await clickUnstable(page, page.getByRole('button', { name: /^repost$/i }).first());
+    if (await withThoughts.waitFor({ timeout: 5_000 }).then(() => true, () => false)) break;
+    const items = await page.locator('[role="menu"], [role="menuitem"], [role="listbox"], [role="option"]').allInnerTexts().catch(() => []);
+    const menu = items.map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean).join(' / ') || 'no menu open';
+    log(`repost: the menu did not show "Repost with thoughts" (try ${attempt + 1}; seen: ${menu})`);
+    await page.screenshot({ path: join(JOBS_DIR, `${job.id}.repost-menu.png`) }).catch(() => {});
+    if (attempt >= waits.length) throw new Error(`the Repost menu did not offer "Repost with thoughts" (seen: ${menu}); see ${job.id}.repost-menu.png`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(waits[attempt]);
+    await page.reload(); // the identity chosen on this post is remembered across a reload
+    await dismissPopups(page);
+  }
+  await clickUnstable(page, withThoughts);
   // The modal's editor renders a moment after the menu click, while the post's own comment box
   // ("Text editor for creating comment") is there all along: "the last visible textbox" picked that
   // one whenever the modal was slow (measured 2026-10-23, 0 of 175 characters landed). Wait for a
