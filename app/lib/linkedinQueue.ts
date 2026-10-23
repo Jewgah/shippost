@@ -175,7 +175,7 @@ export function nextQueued(items: QueueItem[] = listQueue()): QueueItem | null {
  * comment, `repost` (the takeaway beat) under the author's comment (on the repost, or on a personal post).
  */
 export type CardKind = "post" | "repost";
-export const cardPath = (id: string, kind: CardKind) => path.join(visualsDir(), `${id}-card-${kind}.png`);
+export const cardPath = (id: string, kind: CardKind) => path.join(visualsDir(), `${id}-card-${kind}.gif`);
 export function cardsFor(id: string): Record<CardKind, boolean> {
   if (!isQueueId(id)) return { post: false, repost: false };
   return { post: fs.existsSync(cardPath(id, "post")), repost: fs.existsSync(cardPath(id, "repost")) };

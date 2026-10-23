@@ -177,8 +177,8 @@ const REMOTION_TIMEOUT_MS = 10 * 60 * 1000;
 const CLIP = { hook: 81, image: 81, point: 90, takeaway: 75, end: 93, fps: 30 };
 
 /**
- * The two comment cards, cut from the clip with ffmpeg: the takeaway beat (<id>-card-repost.png,
- * under the author's comment on the repost) and the end card (<id>-card-post.png, under the page's
+ * The two comment cards, cut from the clip with ffmpeg: the takeaway act (<id>-card-repost.gif,
+ * under the author's comment on the repost) and the end card (<id>-card-post.gif, under the page's
  * or the post's first comment). Needs <id>.clip.json for the act count. Never fatal: no ffmpeg or
  * no clip means text-only comments.
  */
@@ -192,11 +192,14 @@ export async function cutCards({ id, visualsDir, queueDir }) {
   }
   if (!existsSync(mp4)) return;
   const takeawayFrom = CLIP.hook + (props.image ? CLIP.image : 0) + CLIP.point * Math.max(1, Math.min(3, props.points?.length ?? 1));
-  // 60 frames into each act: the takeaway's underline is drawn, the end card's logo has settled.
-  const at = { repost: takeawayFrom + 60, post: takeawayFrom + CLIP.takeaway + 60 };
-  for (const [kind, frame] of Object.entries(at)) {
-    const out = join(visualsDir, `${id}-card-${kind}.png`);
-    const r = await run('ffmpeg', ['-y', '-loglevel', 'error', '-ss', (frame / CLIP.fps).toFixed(3), '-i', mp4, '-frames:v', '1', out], { cwd: visualsDir, env: process.env }, 60_000);
+  // Each card is its whole act as an animated GIF (a still looked like a plain picture under the
+  // comment, 2026-10-23): 12 fps, 480 px wide, so it stays well under LinkedIn's 5 MB / 400 frames.
+  const at = { repost: [takeawayFrom, CLIP.takeaway], post: [takeawayFrom + CLIP.takeaway, CLIP.end] };
+  const gif = 'fps=12,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle';
+  for (const [kind, [from, len]] of Object.entries(at)) {
+    const out = join(visualsDir, `${id}-card-${kind}.gif`);
+    const args = ['-y', '-loglevel', 'error', '-ss', (from / CLIP.fps).toFixed(3), '-t', (len / CLIP.fps).toFixed(3), '-i', mp4, '-filter_complex', gif, '-loop', '0', out];
+    const r = await run('ffmpeg', args, { cwd: visualsDir, env: process.env }, 120_000);
     if (r.code !== 0) log(`job ${id}: card ${kind} not cut (${lastLine(r.stderr) || `ffmpeg exited ${r.code}`})`);
   }
 }
