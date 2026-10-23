@@ -174,7 +174,7 @@ function askClaude(cfg, prompt) {
 const REMOTION_TIMEOUT_MS = 10 * 60 * 1000;
 
 // Mirrors marketing-studio's studio/src/lib/postClip.ts act table (30 fps).
-const CLIP = { hook: 81, image: 81, point: 90, takeaway: 75, end: 93, fps: 30 };
+const CLIP = { hook: 81, image: 81, point: 90, takeaway: 75, end: 93, wipe: 14, fps: 30 };
 
 /**
  * The two comment cards, cut from the clip with ffmpeg: the end card (logo, then the site) under
@@ -194,10 +194,12 @@ export async function cutCards({ id, visualsDir, queueDir }) {
   // Both cards are the end act (the logo drawing in, then the site) as a looping GIF: 12 fps,
   // 480 px wide, well under LinkedIn's 5 MB / 400 frames. (A still read as a plain picture, and the
   // takeaway act was not wanted: "the logo animated, showing hakolkal.com", 2026-10-23.)
-  const from = takeawayFrom + CLIP.takeaway;
+  // Past the wipe: the end card wipes in OVER the takeaway for WIPE_LEN frames (postClip.ts), so a
+  // GIF starting at the act's first frame flashed the takeaway text (2026-10-23).
+  const from = takeawayFrom + CLIP.takeaway + CLIP.wipe;
   const gif = 'fps=12,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle';
   const post = join(visualsDir, `${id}-card-post.gif`);
-  const args = ['-y', '-loglevel', 'error', '-ss', (from / CLIP.fps).toFixed(3), '-t', (CLIP.end / CLIP.fps).toFixed(3), '-i', mp4, '-filter_complex', gif, '-loop', '0', post];
+  const args = ['-y', '-loglevel', 'error', '-ss', (from / CLIP.fps).toFixed(3), '-t', ((CLIP.end - CLIP.wipe) / CLIP.fps).toFixed(3), '-i', mp4, '-filter_complex', gif, '-loop', '0', post];
   const r = await run('ffmpeg', args, { cwd: visualsDir, env: process.env }, 120_000);
   if (r.code !== 0) return log(`job ${id}: cards not cut (${lastLine(r.stderr) || `ffmpeg exited ${r.code}`})`);
   copyFileSync(post, join(visualsDir, `${id}-card-repost.gif`)); // ponytail: two names, one card, the poster reads both
