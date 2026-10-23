@@ -137,8 +137,9 @@ const loggedOut = (url) => /\/(login|checkpoint|uas|authwall|signup)(\/|\?|#|$)/
  * Enter between lines, so paragraphs and blank lines survive. The OS clipboard is never touched.
  */
 async function pasteInto(editor, text, newline = 'Enter') {
-  await editor.click();
   const page = editor.page();
+  // A popup over the editor (the identity picker stuck on "Loading", 2026-10-23) blocks a plain click.
+  await clickUnstable(page, editor);
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   for (let i = 0; i < lines.length; i++) {
     if (lines[i]) await page.keyboard.insertText(lines[i]);
@@ -179,17 +180,23 @@ const DIALOGS = '[role="dialog"], dialog[open]';
  * block every click. Only dialogs WITHOUT a text box are closed: the composer is never touched.
  */
 async function dismissPopups(page) {
+  // Explicit role, or a native <dialog open> (the Premium upsell of 2026-10-22 had no role attribute,
+  // so it intercepted every click on the feed unseen).
+  const popups = page.locator(DIALOGS).filter({ hasNot: page.locator('[contenteditable="true"]') });
   for (let i = 0; i < 3; i++) {
-    // Explicit role, or a native <dialog open> (the Premium upsell of 2026-10-22 had no role attribute,
-    // so it intercepted every click on the feed unseen).
-    const popup = page.locator(DIALOGS).filter({ hasNot: page.locator('[contenteditable="true"]') }).first();
-    if (!(await popup.isVisible().catch(() => false))) return;
-    const close = popup.getByRole('button', { name: /^(dismiss|close)|^not now$|^skip$/i }).first();
-    if (await close.isVisible().catch(() => false)) await close.click().catch(() => {});
-    else await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
-    // Still there: a native dialog closes itself when asked.
-    if (await popup.isVisible().catch(() => false)) await popup.evaluate((el) => el.close?.()).catch(() => {});
+    // Every visible one, not just the first: the messaging overlay is a role="dialog" that sits in
+    // front of the list and never closes, which left the stuck identity picker behind it untouched (2026-10-23).
+    const open = [];
+    for (const popup of await popups.all()) if (await popup.isVisible().catch(() => false)) open.push(popup);
+    if (!open.length) return;
+    for (const popup of open) {
+      const close = popup.getByRole('button', { name: /^(dismiss|close)|^not now$|^skip$/i }).first();
+      if (await close.isVisible().catch(() => false)) await close.click({ timeout: 2000 }).catch(() => {});
+      else await page.keyboard.press('Escape');
+      await page.waitForTimeout(500);
+      // Still there: a native dialog closes itself when asked.
+      if (await popup.isVisible().catch(() => false)) await popup.evaluate((el) => el.close?.()).catch(() => {});
+    }
   }
 }
 
@@ -364,7 +371,14 @@ async function actAs(page, name) {
   const save = dlg.getByRole('button', { name: /^save$/i });
   if (!dryRun && (await save.isEnabled().catch(() => false))) await save.click();
   else await dlg.getByRole('button', { name: /^cancel$/i }).click().catch(() => page.keyboard.press('Escape'));
-  await dlg.waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => {});
+  if (await dlg.waitFor({ state: 'hidden', timeout: 10_000 }).then(() => true, () => false)) return;
+  // Measured 2026-10-23: Save can sit on "Loading" for good while the choice is applied underneath.
+  // Left open, it swallows every later click (the repost timed out on it twice). Close it ourselves.
+  log(`identity picker still open after ${name ? name : 'your own profile'} was chosen: closing it`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(500);
+  if (await dlg.isVisible().catch(() => false)) await dlg.evaluate((el) => (el.closest('dialog') ?? el).close?.()).catch(() => {});
+  await dlg.waitFor({ state: 'hidden', timeout: 3_000 }).catch(() => {});
 }
 
 /**
@@ -435,8 +449,8 @@ async function commentOn(page, urn, text, asPage, label, image = null) {
  * Repost the company post `urn` on the author's own profile, "with thoughts" (the caption). Measured
  * on the HakolKal page (2026-10-14): on /feed/update/<urn>/ you act as yourself; "Repost" opens a
  * menu of "Repost with thoughts" and "Repost instantly", and only the first is ever clicked (the
- * regex cannot match "instantly"); the "with thoughts" editor is a modal with NO dialog role, and
- * its button is "Repost". Returns the repost's own urn (null if it could not be confirmed).
+ * regex cannot match "instantly"); the "with thoughts" editor is a native <dialog> since 2026-10-23
+ * (a modal with no dialog role before), its textbox has no aria-label, and its button is "Repost". Returns the repost's own urn (null if it could not be confirmed).
  * Dry run (urn = null): rehearses on the latest page post and stops before the final click.
  */
 /**
@@ -466,8 +480,16 @@ async function repost(page, job, urn) {
   await actAs(page, null); // the repost is the member's, whatever identity was last used on this post
   await clickUnstable(page, page.getByRole('button', { name: /^repost$/i }).first());
   await clickUnstable(page, page.getByText(/^repost with (your )?thoughts$/i).first());
-  const editor = page.locator('[contenteditable="true"]').filter({ visible: true }).last();
+  // The modal's editor renders a moment after the menu click, while the post's own comment box
+  // ("Text editor for creating comment") is there all along: "the last visible textbox" picked that
+  // one whenever the modal was slow (measured 2026-10-23, 0 of 175 characters landed). Wait for a
+  // textbox that is not the comment box.
+  const editor = page.locator('[contenteditable="true"]:not([aria-label*="comment" i])').filter({ visible: true }).last();
   await editor.waitFor({ timeout: 15_000 });
+  if (process.env.SHIPPOST_LINKEDIN_DEBUG) {
+    const boxes = await page.locator('[contenteditable="true"]').evaluateAll((els) => els.map((el) => ({ label: el.getAttribute('aria-label'), dialog: el.closest('dialog, [role="dialog"]')?.tagName ?? null, visible: el.getClientRects().length > 0 })));
+    log(`repost: text boxes ${JSON.stringify(boxes)}`);
+  }
   await pasteInto(editor, job.repost);
   // The modal's own Repost button: the nearest ancestor of the editor that holds one (the post's
   // action-bar "Repost" sits outside the modal).
