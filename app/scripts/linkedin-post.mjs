@@ -439,6 +439,18 @@ async function commentOn(page, urn, text, asPage, label, image = null) {
       if (Date.now() > deadline) throw new Error(`the comment on ${urn} was not confirmed (still in the box, or no box, after 30 s)`);
       await page.waitForTimeout(500);
     }
+    // The box empties BEFORE the comment is saved: with a card, the upload runs on for seconds, and
+    // leaving the page (the next step's goto, or the browser closing) cut it short (2026-10-23
+    // 08:01: both comments logged as posted, neither on LinkedIn). So wait for the comment to show
+    // on the page, for the network to settle, then reload and find it again: only then is it posted.
+    const snippet = (text.replace(/https?:\/\/\S+/g, '').split('\n').find((l) => l.trim()) ?? '').trim().slice(0, 40);
+    const shown = () => (snippet ? page.getByText(snippet).first() : page.locator('article, [data-id]').getByText(/\bnow\b/).first());
+    await shown().waitFor({ timeout: 30_000 }).catch(() => { throw new Error(`the comment on ${urn} did not show on the page within 30 s`); });
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    await page.waitForTimeout(2_000);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await dismissPopups(page);
+    if (!(await shown().waitFor({ timeout: 20_000 }).then(() => true, () => false))) throw new Error(`the comment on ${urn} is not on the post after a reload: LinkedIn dropped it`);
   } finally {
     // Back to the member even when the comment failed: the repost and its comment must never go out as the page.
     if (asPage) await actAs(page, null).catch((e) => log(`could not switch back to the member on ${urn}: ${(e && e.message) || e}`));
