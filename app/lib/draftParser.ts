@@ -125,7 +125,7 @@ const D_HEADER = `\\*\\*D\\b\\W{0,3}Company page post[^\\n]*\\*\\*`;
 // entirely, so also stop at C / the why-line / the visuals block. Without these fallbacks the
 // pasteable post would swallow everything to the end of the option.
 const A_END_RE = new RegExp(
-  `\\*\\*B\\.\\s*Repost caption[^\\n]*\\*\\*|${C_HEADER}|${D_HEADER}|^_(Why it works|Suggested visuals?):_`,
+  `\\*\\*B\\.\\s*(?:Repost caption|Thread)[^\\n]*\\*\\*|${C_HEADER}|${D_HEADER}|^_(Why it works|Suggested visuals?):_`,
   "im"
 );
 // End of the B section: the C section when present, else the why-line (pre-C drafts).
@@ -163,7 +163,7 @@ function parseOptionBlock(headerLine: string, rawBody: string[], n: number, batc
     extractBetween(text, /\*\*A\.\s*Company post\*\*/i, A_END_RE)
   );
   const repostCaption = humanizeText(
-    extractBetween(text, /\*\*B\.\s*Repost caption[^\n]*\*\*/i, B_END_RE)
+    extractBetween(text, /\*\*B\.\s*(?:Repost caption|Thread)[^\n]*\*\*/i, B_END_RE)
   );
   // Not humanized: it's a URL (or a soft-CTA note), never published prose. Ends at the
   // why-line, or at the visuals block if a slipped generation omitted the why-line — the

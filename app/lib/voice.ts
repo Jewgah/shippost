@@ -2,14 +2,14 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config";
+import { channelPaths, type Channel } from "./channel";
 
 const SEP = "\n\n---\n\n";
 const STORE_CAP = 100; // keep the file from growing forever (harvest only reads the last ~12)
 export const PICKS_CAP = 2000; // bound the picks log too (~years of an every-2-days habit)
 
-function ensureDir() {
-  const { resolved } = loadConfig();
-  fs.mkdirSync(resolved.draftsDir, { recursive: true });
+function ensureDir(channel: Channel = "linkedin") {
+  fs.mkdirSync(channelPaths(channel).dir, { recursive: true });
 }
 
 function readBlocks(file: string): string[] {
@@ -27,6 +27,8 @@ function writeBlocks(file: string, blocks: string[]) {
 }
 
 const MIN_POST_CHARS = 150;
+// An X post is at most 280 characters: the LinkedIn floor would drop most of them.
+const X_MIN_POST_CHARS = 40;
 // A real tag (opening, closing or self-closing), not a "n<m" comparison in prose.
 const HTML_TAG_RE = /<\/?[a-z][a-z0-9-]*(\s[^<>]*)?\/?>/i;
 const MERGE_TOKEN_RE = /%[A-Z_]+%/;
@@ -39,26 +41,26 @@ const MERGE_TOKEN_RE = /%[A-Z_]+%/;
  * LinkedIn post that literally quotes an HTML tag is an accepted false positive (the routes
  * report it as `skipped`, nothing is silent).
  */
-export function looksLikePost(p: string): boolean {
+export function looksLikePost(p: string, channel: Channel = "linkedin"): boolean {
   const t = p.trim();
-  return t.length >= MIN_POST_CHARS && !HTML_TAG_RE.test(t) && !MERGE_TOKEN_RE.test(t);
+  return t.length >= (channel === "x" ? X_MIN_POST_CHARS : MIN_POST_CHARS) && !HTML_TAG_RE.test(t) && !MERGE_TOKEN_RE.test(t);
 }
 
 /** Append posts (dedup against what's already there, drop what fails looksLikePost), capped. Returns count added. */
-export function addRecentPosts(posts: string[]): number {
-  ensureDir();
-  const { resolved } = loadConfig();
-  const existing = readBlocks(resolved.recentPostsPath);
+export function addRecentPosts(posts: string[], channel: Channel = "linkedin"): number {
+  ensureDir(channel);
+  const corpus = channelPaths(channel).corpus;
+  const existing = readBlocks(corpus);
   const seen = new Set(existing.map((b) => b.replace(/\s+/g, " ").trim().toLowerCase()));
   let added = 0;
   for (const p of posts) {
     const norm = p.replace(/\s+/g, " ").trim().toLowerCase();
-    if (!norm || seen.has(norm) || !looksLikePost(p)) continue;
+    if (!norm || seen.has(norm) || !looksLikePost(p, channel)) continue;
     existing.push(p.trim());
     seen.add(norm);
     added++;
   }
-  writeBlocks(resolved.recentPostsPath, existing);
+  writeBlocks(corpus, existing);
   return added;
 }
 
@@ -134,27 +136,28 @@ export function recordPick(args: {
   topic: string;
   companyPost: string;
   repostCaption?: string;
+  channel?: Channel;
 }): void {
-  ensureDir();
-  const { resolved } = loadConfig();
+  const channel = args.channel ?? "linkedin";
+  ensureDir(channel);
   appendCappedJsonl(
-    resolved.picksLogPath,
+    channelPaths(channel).picks,
     { ts: new Date().toISOString(), date: args.date, option: args.option, pillar: args.pillar, topic: args.topic },
     PICKS_CAP
   );
   // Add the published company post to the voice corpus so future runs match it.
-  if (args.companyPost?.trim()) addRecentPosts([args.companyPost]);
+  if (args.companyPost?.trim()) addRecentPosts([args.companyPost], channel);
 }
 
 /**
  * Record that the author thumbed an option down. Logged (not added to the voice corpus) so the
  * harvest can tell future runs to avoid these angles. Same exact-id join + cap as picks.
  */
-export function recordReject(args: { date: string; option: number; pillar: string; topic: string }): void {
-  ensureDir();
-  const { resolved } = loadConfig();
+export function recordReject(args: { date: string; option: number; pillar: string; topic: string; channel?: Channel }): void {
+  const channel = args.channel ?? "linkedin";
+  ensureDir(channel);
   appendCappedJsonl(
-    resolved.rejectsLogPath,
+    channelPaths(channel).rejects,
     { ts: new Date().toISOString(), date: args.date, option: args.option, pillar: args.pillar, topic: args.topic },
     PICKS_CAP
   );
@@ -164,24 +167,21 @@ export function recordReject(args: { date: string; option: number; pillar: strin
  * Map of draft id → posted option numbers. Joined on the EXACT draft id so same-day runs
  * (2026-05-31_185437 vs _190218) don't bleed into each other.
  */
-export function pickedOptionsByDraftId(): Record<string, number[]> {
-  const { resolved } = loadConfig();
-  return groupOptionsByDraftId(readLogEntries(resolved.picksLogPath));
+export function pickedOptionsByDraftId(channel: Channel = "linkedin"): Record<string, number[]> {
+  return groupOptionsByDraftId(readLogEntries(channelPaths(channel).picks));
 }
 
 /** Map of draft id → rejected option numbers, for showing what you've already dismissed. */
-export function rejectedOptionsByDraftId(): Record<string, number[]> {
-  const { resolved } = loadConfig();
-  return groupOptionsByDraftId(readLogEntries(resolved.rejectsLogPath));
+export function rejectedOptionsByDraftId(channel: Channel = "linkedin"): Record<string, number[]> {
+  return groupOptionsByDraftId(readLogEntries(channelPaths(channel).rejects));
 }
 
 /**
  * Posted-options map AND posting cadence from a SINGLE read of the picks log — the home page
  * needs both, so this avoids reading/parsing the log twice per render.
  */
-export function pickData(): { pickedByDraftId: Record<string, number[]>; cadence: Cadence } {
-  const { resolved } = loadConfig();
-  const entries = readLogEntries(resolved.picksLogPath);
+export function pickData(channel: Channel = "linkedin"): { pickedByDraftId: Record<string, number[]>; cadence: Cadence } {
+  const entries = readLogEntries(channelPaths(channel).picks);
   return { pickedByDraftId: groupOptionsByDraftId(entries), cadence: cadenceFromPicks(entries, Date.now()) };
 }
 

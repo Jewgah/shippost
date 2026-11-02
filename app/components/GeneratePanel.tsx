@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import FolderPicker from "./FolderPicker";
+import type { Channel } from "@/lib/channel";
 
 type Phase = "idle" | "running" | "error";
 
@@ -19,7 +20,8 @@ const STEPS = [
   "Almost there…",
 ];
 
-export default function GeneratePanel() {
+export default function GeneratePanel({ channel = "linkedin" }: { channel?: Channel }) {
+  const q = channel === "x" ? "?channel=x" : "";
   const router = useRouter();
   const reduce = useReducedMotion();
   const [phase, setPhase] = useState<Phase>("idle");
@@ -47,21 +49,21 @@ export default function GeneratePanel() {
     (lastResult: { ok?: boolean; date?: string; error?: string } | null) => {
       stopPoll();
       if (lastResult?.ok && lastResult.date) {
-        router.push(`/draft/${lastResult.date}`);
+        router.push(channel === "x" ? `/x/draft/${lastResult.date}` : `/draft/${lastResult.date}`);
         router.refresh();
       } else {
         setPhase("error");
         setError(lastResult?.error || "Generation failed — check drafts/.run.log");
       }
     },
-    [router]
+    [router, channel]
   );
 
   const startPolling = useCallback(() => {
     stopPoll();
     pollRef.current = setInterval(async () => {
       try {
-        const r = await fetch("/api/generate", { cache: "no-store" });
+        const r = await fetch(`/api/generate${q}`, { cache: "no-store" });
         const j = await r.json();
         setNow(Date.now());
         if (!j.running) onDone(j.lastResult);
@@ -69,13 +71,13 @@ export default function GeneratePanel() {
         /* transient — keep polling */
       }
     }, 3000);
-  }, [onDone]);
+  }, [onDone, q]);
 
   // On mount: if a run is already in progress (e.g. page refresh), resume the live view.
   useEffect(() => {
     (async () => {
       try {
-        const j = await (await fetch("/api/generate", { cache: "no-store" })).json();
+        const j = await (await fetch(`/api/generate${q}`, { cache: "no-store" })).json();
         if (j.running) {
           setPhase("running");
           setStartedAt(j.startedAt ?? Date.now());
@@ -136,6 +138,7 @@ export default function GeneratePanel() {
             direction: direction.trim() || undefined,
             project: project || undefined,
             category: category || undefined,
+            channel,
           }),
         })
       ).json();

@@ -19,7 +19,11 @@ FORCE=0
 case "${1:-}" in --force|-f) FORCE=1 ;; esac
 [ "${SHIPPOST_FORCE:-0}" = "1" ] && FORCE=1
 
+# SHIPPOST_CHANNEL=x: everything this run owns (drafts, picks, run log, result) lives in the
+# x/ subfolder of the drafts dir, so the LinkedIn side never sees it. Unset = LinkedIn, as ever.
+CHANNEL="${SHIPPOST_CHANNEL:-linkedin}"
 BOOST_DIR="$CFG_OUTPUT_DIR"
+[ "$CHANNEL" = "x" ] && BOOST_DIR="$CFG_OUTPUT_DIR/x"
 LAST_RUN="$BOOST_DIR/.last_run"
 LOG="$BOOST_DIR/.run.log"
 MIN_GAP=$(( CFG_MIN_GAP_HOURS * 3600 ))
@@ -75,7 +79,9 @@ stamp="${SHIPPOST_STAMP:-$(date +%F_%H%M%S)}"
 draft="$BOOST_DIR/$stamp.md"
 echo "$(date '+%F %T') starting generation -> $draft" >> "$LOG"
 
-PROMPT="Run the shippost post pipeline now. Read and follow $CFG_SKILL_MD exactly, start to finish. Language: $CFG_LANGUAGE. Today is $today. Produce 5 ranked, distinct options and save them to this exact path: $draft . Do not ask any questions — make the best editorial choices and write the file."
+SKILL_MD="$CFG_SKILL_MD"
+[ "$CHANNEL" = "x" ] && SKILL_MD="$CFG_ENGINE_DIR/SKILL-x.md"
+PROMPT="Run the shippost post pipeline now. Read and follow $SKILL_MD exactly, start to finish. Language: $CFG_LANGUAGE. Today is $today. Produce 5 ranked, distinct options and save them to this exact path: $draft . Do not ask any questions — make the best editorial choices and write the file."
 
 # Optional per-run steering passed from the app via env vars. Appended to the prompt;
 # SHIPPOST_PROJECT additionally scopes the harvest (see harvest.sh).
@@ -89,7 +95,9 @@ if [ -n "$FOCUS" ]; then
 fi
 
 # Posting mode (personal-only is the default; company mode is opt-in in Settings).
-if [ "${SHIPPOST_COMPANY_MODE:-0}" = "1" ]; then
+if [ "$CHANNEL" = "x" ]; then
+  : # X has no company/personal split: SKILL-x.md fully specifies the format
+elif [ "${SHIPPOST_COMPANY_MODE:-0}" = "1" ]; then
   PROMPT="$PROMPT  Mode: COMPANY — each option keeps a company-page post (section A) AND a short first-person repost caption (section B), exactly as the SKILL specifies."
 else
   PROMPT="$PROMPT  Mode: PERSONAL-ONLY — write each option as ONE first-person post for the author's OWN LinkedIn profile (not a company page). Put that single post under '**A. Company post**' and OMIT section B entirely (no repost caption). Everything else (header, '**C. First comment**' when the option has a link, _Why it works:_, _Suggested visuals:_) stays as specified."
@@ -137,6 +145,7 @@ count_waiting() {
 # fractional seconds every app-written ts carries, hence the sub() before parsing.
 success_message() {
   local msg="5 drafts ready, open the shippost app and pick one"
+  [ "$CHANNEL" = "x" ] && msg="5 X drafts ready, open the shippost app and pick one"
   [ -f "$PICKS" ] || { printf '%s' "$msg"; return; }
   local newest last_epoch last_date days waiting
   newest="$(jq -R 'fromjson? | select(type == "object" and (.ts | type) == "string" and (.date | type) == "string")
@@ -170,6 +179,7 @@ success_message() {
 # (~80 s warm) happens behind that. It takes the SAME `.rendering` lock the app's /api/render
 # route uses, so a scheduled render and a button click can never load the model twice at once.
 render_star_visual() {
+  [ "$CHANNEL" = "x" ] && return 0 # no image render for X
   [ -f "$CFG_ENGINE_DIR/render-visual.mjs" ] || return 0
 
   # Resolve node under a minimal launchd/cron PATH, exactly as notify() resolves

@@ -12,6 +12,7 @@ source "$SELF_DIR/lib/config.sh"
 set +e
 
 LOG="$CFG_OUTPUT_DIR/.run.log"
+[ "${SHIPPOST_CHANNEL:-linkedin}" = "x" ] && LOG="$CFG_OUTPUT_DIR/x/.run.log"
 file="${SHIPPOST_EDIT_FILE:-}"
 opt="${SHIPPOST_EDIT_OPTION:-}"
 instr="${SHIPPOST_EDIT_PROMPT:-}"
@@ -33,6 +34,19 @@ Rules:
 - Language: $CFG_LANGUAGE.
 - Scrub rules still apply: never name clients ($CFG_SCRUB_LIST), never the day job, no secrets/tokens/internal URLs.
 Make the edit and save the file in place. Do not ask any questions — make the best editorial choice."
+
+# X channel: the structure and the limits differ (see engine/SKILL-x.md).
+if [ "${SHIPPOST_CHANNEL:-linkedin}" = "x" ]; then
+  PROMPT="Revise ONE option in an existing X draft. The file is at this exact path: $file
+Rewrite ONLY 'Option $opt' according to this instruction from the author: \"$instr\"
+Rules:
+- Leave every OTHER option byte-for-byte unchanged; do not touch the title or footer.
+- Keep Option $opt's structure: the header line '## [⭐ ]Option $opt - {pillar} - {2-4 word topic}   ({score}/10)', then '**A. Company post**' (the single post), '**B. Thread**' (only if the option already has one; posts numbered '2/', '3/', one per paragraph), '**C. First comment**' (only if the option already has one), '_Why it works:_'.
+- Keep the post in section A at 280 characters or fewer counted the X way (every link counts 23, emoji and CJK count 2); keep each thread post at 280 or fewer.
+- Language: $CFG_LANGUAGE.
+- Scrub rules still apply: never name clients ($CFG_SCRUB_LIST), never the day job, no secrets/tokens/internal URLs.
+Make the edit and save the file in place. Do not ask any questions."
+fi
 
 # "Generate for company": add/replace a section D with a company-page version of a personal post,
 # plus a section B repost caption when the option has none (the queue's company mode reposts with it).

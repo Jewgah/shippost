@@ -2,6 +2,16 @@
 
 A running log of notable changes, most recent first.
 
+## feat: an "X" tab next to LinkedIn (2026-11-02)
+
+**Problem:** shippost only drafted for LinkedIn: one drafts folder, one 3000-character prompt, one picks log, one voice corpus. The author is opening an X account and wanted the same 5-ranked-options flow for it, without touching how LinkedIn behaves.
+
+**Solution:** One `channel` parameter (`linkedin` default, `x`). Every X file lives in an `x/` subfolder of the drafts folder (drafts, picks, rejects, X voice corpus, `.last_generate.json`, `.run.log`), which the flat LinkedIn listing never sees; the `.generating` lock stays in the root so only one headless run happens at a time. `SHIPPOST_CHANNEL=x` makes `generate.sh` point the model at `engine/SKILL-x.md` (one post of at most 280 characters, an optional `**B. Thread**` numbered `2/`, `3/`, the link in `**C. First comment**`), skip the company-mode block and the image render, and say "5 X drafts ready". `harvest.sh` then shows the X corpus first and the LinkedIn one as a voice seed ("match the voice, not the length"). The parser accepts `**B. Thread**` as an alias of the repost caption section. `lib/xText.ts` counts a post the way X does (twitter-text config v3: a link is 23, CJK and emoji 2, a plain count with no cap) and builds the `x.com/intent/post` compose link. The drafts, draft, pick, reject, edit and generate routes take `channel` (unknown value: 400); an X pick feeds the X corpus with a 40-character floor instead of 150. UI: a `LinkedIn | X` switch in the top bar, `/x` and `/x/draft/[date]`, and an `XOptionCard` with a live counter, per-post copy, "Open in X", "I posted this", "Not for me" and "Edit with AI". Posting stays manual; there is no X API and no scheduled X run.
+
+**Files changed:** engine/SKILL-x.md, engine/generate.sh, engine/harvest.sh, engine/edit.sh, app/lib/channel.ts, app/lib/xText.ts, app/lib/voice.ts, app/lib/drafts.ts, app/lib/draftParser.ts, app/app/api/{drafts,drafts/[date],pick,reject,edit,generate,import}/route.ts, app/app/x/page.tsx, app/app/x/draft/[date]/page.tsx, app/components/{XOptionCard,TopBar,GeneratePanel,DraftList,DraftCarousel}.tsx, app/test/{xText,channel,xRoutes,engine,draftParser}.test.ts, README.md, ROADMAP.md
+
+---
+
 ## docs: the 4:5 video rule works for anyone, not one machine (2026-11-02)
 
 **Problem:** The SKILL's new "4:5 for LinkedIn" paragraph (9e08c02) named one author's absolute marketing-studio path and folder layout in a public repo, so for every other user it pointed at a tool and a command they do not have. It also contradicted the rule right above it ("only write this line with a path the author gave you"), matched "the same asset" by file name alone (a launch video's 4:5 cut sits next to an unrelated social clip of the same aspect), assumed `ffprobe` exists, and put its warning in a finish message a headless run never writes.

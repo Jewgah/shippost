@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     }
     const buf = Buffer.from(await file.arrayBuffer());
     const { posts, column, totalRows } = parseShares(buf, file.name);
-    const usable = posts.filter(looksLikePost);
+    const usable = posts.filter((p) => looksLikePost(p));
     if (preview) {
       return NextResponse.json({
         preview: true,

@@ -5,6 +5,7 @@ import path from "node:path";
 import { loadConfig } from "./config";
 import { normalizeDraftMarkdown, parseDraft, parseDraftMeta, removeOptionFromMarkdown, type Draft } from "./draftParser";
 import { isDraftId } from "./draftId";
+import { channelDir, type Channel } from "./channel";
 import { recentPostCount, pickedOptionsByDraftId } from "./voice";
 import { effectiveLogoPath, readSettings, uploadedAvatarPath } from "./settings";
 
@@ -21,21 +22,21 @@ export interface DraftSummary {
 
 // `picked` can be passed in by a caller that already read the picks log (e.g. the home page,
 // which also needs cadence from the same read) — otherwise we read it ourselves.
-export function listDrafts(picked?: Record<string, number[]>): DraftSummary[] {
-  const { resolved } = loadConfig();
-  if (!fs.existsSync(resolved.draftsDir)) return [];
+export function listDrafts(picked?: Record<string, number[]>, channel: Channel = "linkedin"): DraftSummary[] {
+  const dir = channelDir(channel);
+  if (!fs.existsSync(dir)) return [];
   const files = fs
-    .readdirSync(resolved.draftsDir)
+    .readdirSync(dir)
     .filter((f) => f.endsWith(".md") && isDraftId(f.slice(0, -3)))
     .sort()
     .reverse();
 
-  const pickedMap = picked ?? pickedOptionsByDraftId();
+  const pickedMap = picked ?? pickedOptionsByDraftId(channel);
 
   return files
     .map((f): DraftSummary | null => {
       try {
-        const md = fs.readFileSync(path.join(resolved.draftsDir, f), "utf8");
+        const md = fs.readFileSync(path.join(dir, f), "utf8");
         const d = parseDraftMeta(md); // headers only — the list never needs post bodies
         const id = f.replace(/\.md$/, "");
         const pillars = Array.from(new Set(d.options.map((o) => o.pillar).filter(Boolean)));
@@ -62,10 +63,9 @@ export function listDrafts(picked?: Record<string, number[]>): DraftSummary[] {
     .filter((d): d is DraftSummary => d !== null);
 }
 
-export function readDraft(date: string): Draft | null {
-  const { resolved } = loadConfig();
+export function readDraft(date: string, channel: Channel = "linkedin"): Draft | null {
   if (!isDraftId(date)) return null; // guard against path traversal
-  const file = path.join(resolved.draftsDir, `${date}.md`);
+  const file = path.join(channelDir(channel), `${date}.md`);
   if (!fs.existsSync(file)) return null;
   // Freeze slipped generic headers into explicit `Option N` BEFORE the user can pick/reject/
   // edit/delete — the option number is the join identity for all of those, and position-derived
@@ -91,10 +91,9 @@ export function readDraft(date: string): Draft | null {
  * cleared a card. Returns true if a file was removed, false if it was already gone or the id is
  * malformed (the same path-traversal guard readDraft uses).
  */
-export function deleteDraft(date: string): boolean {
+export function deleteDraft(date: string, channel: Channel = "linkedin"): boolean {
   if (!isDraftId(date)) return false;
-  const { resolved } = loadConfig();
-  const file = path.join(resolved.draftsDir, `${date}.md`);
+  const file = path.join(channelDir(channel), `${date}.md`);
   if (!fs.existsSync(file)) return false;
   fs.rmSync(file);
   return true;
@@ -107,10 +106,9 @@ export function deleteDraft(date: string): boolean {
  * deleted instead of leaving an empty husk. Returns the option count left and whether the package
  * itself was deleted, or null if the draft/option wasn't found.
  */
-export function deleteOption(date: string, option: number): { remaining: number; draftDeleted: boolean } | null {
+export function deleteOption(date: string, option: number, channel: Channel = "linkedin"): { remaining: number; draftDeleted: boolean } | null {
   if (!isDraftId(date)) return null;
-  const { resolved } = loadConfig();
-  const file = path.join(resolved.draftsDir, `${date}.md`);
+  const file = path.join(channelDir(channel), `${date}.md`);
   if (!fs.existsSync(file)) return null;
   const { md, remaining, removed } = removeOptionFromMarkdown(fs.readFileSync(file, "utf8"), option);
   if (!removed) return null;

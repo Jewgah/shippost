@@ -6,6 +6,7 @@ import { loadConfig } from "@/lib/config";
 import { blockCrossSite } from "@/lib/guard";
 import { cleanField } from "@/lib/steering";
 import { isDraftId } from "@/lib/draftId";
+import { channelPaths, resolveChannel } from "@/lib/channel";
 import { acquireRunLock, releaseRunLock } from "@/lib/runLock";
 
 export const runtime = "nodejs";
@@ -30,17 +31,20 @@ export async function POST(req: Request) {
   const company = body.company === true;
   const prompt = company ? "company" : cleanField(body.prompt, 800);
 
+  const channel = resolveChannel(body.channel);
+  if (!channel) return NextResponse.json({ error: "unknown channel" }, { status: 400 });
   if (!isDraftId(date)) return NextResponse.json({ error: "invalid draft id" }, { status: 400 });
   if (!Number.isInteger(option) || option < 1 || option > 20)
     return NextResponse.json({ error: "invalid option" }, { status: 400 });
   if (!prompt) return NextResponse.json({ error: "empty prompt" }, { status: 400 });
 
   const { resolved } = loadConfig();
-  const file = path.join(resolved.draftsDir, `${date}.md`);
+  const cp = channelPaths(channel);
+  const file = path.join(cp.dir, `${date}.md`);
   if (!fs.existsSync(file)) return NextResponse.json({ error: "draft not found" }, { status: 404 });
 
   const lock = path.join(resolved.draftsDir, ".generating");
-  const result = path.join(resolved.draftsDir, ".last_generate.json");
+  const result = cp.result;
   const token = acquireRunLock(lock);
   if (!token) return NextResponse.json({ started: false, running: true });
 
@@ -53,6 +57,7 @@ export async function POST(req: Request) {
       SHIPPOST_EDIT_OPTION: String(option),
       SHIPPOST_EDIT_PROMPT: prompt,
       SHIPPOST_EDIT_MODE: company ? "company" : "",
+      SHIPPOST_CHANNEL: channel,
     },
     stdio: "ignore",
   });

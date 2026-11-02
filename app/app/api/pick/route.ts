@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { recordPick } from "@/lib/voice";
 import { blockCrossSite } from "@/lib/guard";
 import { isDraftId } from "@/lib/draftId";
+import { resolveChannel } from "@/lib/channel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +12,8 @@ export async function POST(req: Request) {
   if (blocked) return blocked;
   try {
     const b = await req.json();
+    const channel = resolveChannel(b?.channel);
+    if (!channel) return NextResponse.json({ error: "unknown channel" }, { status: 400 });
     if (!b?.date || typeof b?.option !== "number" || !b?.companyPost) {
       return NextResponse.json({ error: "date, option, companyPost required" }, { status: 400 });
     }
@@ -26,6 +29,7 @@ export async function POST(req: Request) {
       topic: b.topic ?? "",
       companyPost: b.companyPost,
       repostCaption: b.repostCaption,
+      channel,
     });
     return NextResponse.json({ ok: true });
   } catch (e) {

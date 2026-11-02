@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { DraftSummary } from "@/lib/drafts";
 import { formatDraftId } from "@/lib/draftId";
+import type { Channel } from "@/lib/channel";
 
 // Show the search box once the archive is big enough that scanning gets tedious.
 const SEARCH_THRESHOLD = 4;
 
-export default function DraftList({ drafts }: { drafts: DraftSummary[] }) {
+export default function DraftList({ drafts, channel = "linkedin" }: { drafts: DraftSummary[]; channel?: Channel }) {
   const reduce = useReducedMotion();
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -101,7 +102,7 @@ export default function DraftList({ drafts }: { drafts: DraftSummary[] }) {
                   className="group relative"
                 >
                   <Link
-                    href={`/draft/${d.date}`}
+                    href={channel === "x" ? `/x/draft/${d.date}` : `/draft/${d.date}`}
                     className={`group/card flex items-center justify-between gap-4 rounded-2xl border border-border bg-surface px-5 py-4 transition duration-200 hover:border-accent hover:shadow-glow ${
                       posted ? "opacity-65 hover:opacity-100" : ""
                     }`}
@@ -137,7 +138,7 @@ export default function DraftList({ drafts }: { drafts: DraftSummary[] }) {
                       →
                     </span>
                   </Link>
-                  <DeleteDraftButton date={d.date} onDeleted={() => onDeleted(d.date)} />
+                  <DeleteDraftButton date={d.date} channel={channel} onDeleted={() => onDeleted(d.date)} />
                 </motion.li>
               );
             })}
@@ -150,7 +151,7 @@ export default function DraftList({ drafts }: { drafts: DraftSummary[] }) {
 
 // Two-step delete for a whole draft package: a quiet trash icon (top-right of the card) that, on
 // click, swaps to an explicit "Delete / Cancel" confirm so a stray tap never wipes a draft.
-function DeleteDraftButton({ date, onDeleted }: { date: string; onDeleted: () => void }) {
+function DeleteDraftButton({ date, channel, onDeleted }: { date: string; channel: Channel; onDeleted: () => void }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -160,7 +161,7 @@ function DeleteDraftButton({ date, onDeleted }: { date: string; onDeleted: () =>
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch(`/api/drafts/${date}`, { method: "DELETE" });
+      const res = await fetch(`/api/drafts/${date}${channel === "x" ? "?channel=x" : ""}`, { method: "DELETE" });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         setBusy(false);

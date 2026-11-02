@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import ThemeSwitcher from "./ThemeSwitcher";
 import QueueBoard from "./QueueBoard";
@@ -20,6 +21,8 @@ export default function TopBar({
   hasAvatar?: boolean;
 }) {
   const reduce = useReducedMotion();
+  const path = usePathname() ?? "";
+  const onX = path === "/x" || path.startsWith("/x/");
   const [quitting, setQuitting] = useState(false);
   // The LinkedIn queue lives in this dropdown, on every page. It stays open across pages and
   // reloads (remembered per browser) until closed with the icon or Esc.
@@ -50,9 +53,9 @@ export default function TopBar({
   // Wide screens: the open queue pushes the page content left instead of covering it, so the
   // draft recenters in the space that is left (styles/globals.css, html.queue-open).
   useEffect(() => {
-    document.documentElement.classList.toggle("queue-open", queueOpen);
+    document.documentElement.classList.toggle("queue-open", queueOpen && !onX);
     return () => document.documentElement.classList.remove("queue-open");
-  }, [queueOpen]);
+  }, [queueOpen, onX]);
   useEffect(() => {
     const open = () => toggleQueue(true);
     window.addEventListener("shippost:queue-changed", open);
@@ -114,7 +117,25 @@ export default function TopBar({
             <span className="text-xs text-muted">· {brandName}</span>
           )}
         </Link>
+        <nav aria-label="Channel" className="flex items-center rounded-full border border-border p-0.5 text-xs">
+          {[
+            { href: "/", label: "LinkedIn", active: !onX },
+            { href: "/x", label: "X", active: onX },
+          ].map((t) => (
+            <Link
+              key={t.href}
+              href={t.href}
+              aria-current={t.active ? "page" : undefined}
+              className={`rounded-full px-3 py-1 font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                t.active ? "bg-accent text-bg" : "text-muted hover:text-fg"
+              }`}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
         <div className="flex items-center gap-3">
+          {!onX && (
           <button
             ref={queueBtnRef}
             type="button"
@@ -135,6 +156,7 @@ export default function TopBar({
               </span>
             )}
           </button>
+          )}
           <Link
             href="/settings"
             aria-label="Settings"
@@ -178,7 +200,7 @@ export default function TopBar({
           <div
             ref={queueRef}
             id="queue-dropdown"
-            hidden={!queueOpen}
+            hidden={!queueOpen || onX}
             className="fixed bottom-4 right-4 top-16 z-30 w-[min(var(--queue-w),calc(100vw-32px))] overflow-y-auto rounded-2xl border border-border bg-bg p-4 shadow-2xl"
           >
             <div className="mb-3 flex items-center justify-between">

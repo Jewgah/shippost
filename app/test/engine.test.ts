@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -196,4 +196,88 @@ describe("engine/edit.sh (Generate for company)", () => {
   };
   it("succeeds when the asked option got its section D", () => expect(edit("2")).toBe(0));
   it("exits 3 when only ANOTHER option has a section D", () => expect(edit("1")).toBe(3));
+});
+
+describe("generate.sh with SHIPPOST_CHANNEL=x (stub claude)", () => {
+  let xDir: string;
+  let xCfg: string;
+  let argvLog: string;
+  const run = (stamp: string, env: Record<string, string> = {}) =>
+    sh("generate.sh", { SHIPPOST_CONFIG: xCfg, SHIPPOST_STAMP: stamp, SHIPPOST_FORCE: "1", ...env });
+
+  beforeAll(() => {
+    xDir = path.join(tmp, "drafts-x");
+    fs.mkdirSync(xDir, { recursive: true });
+    argvLog = path.join(tmp, "x-argv.txt");
+    const stub = path.join(tmp, "claude-x-stub.sh");
+    // The stub writes the draft where the PROMPT says (the path after "this exact path: "), as the model would.
+    fs.writeFileSync(
+      stub,
+      `#!/bin/bash\nprintf '%s' "$2" > "${argvLog}"\nout="$(printf '%s' "$2" | sed -n 's/.*this exact path: \\([^ ]*\\) \\. .*/\\1/p')"\nprintf '# X drafts\\n' > "$out"\n`
+    );
+    fs.chmodSync(stub, 0o755);
+    xCfg = path.join(tmp, "config-x.json");
+    fs.writeFileSync(
+      xCfg,
+      JSON.stringify({
+        author: { name: "Test Author" },
+        brand: { name: "TestBrand" },
+        harvest: { repoAllowlistFile: "does-not-matter.txt", skillsRoot: path.join(tmp, "skills") },
+        output: { draftsDir: xDir },
+        engine: { claudeBin: stub, minGapHours: 46 },
+      })
+    );
+  });
+
+  it("writes into x/, names SKILL-x.md, skips the company-mode block, and leaves the root untouched", () => {
+    const stamp = "2031-02-01_000000";
+    run(stamp, { SHIPPOST_CHANNEL: "x", SHIPPOST_COMPANY_MODE: "1" });
+    expect(fs.existsSync(path.join(xDir, "x", `${stamp}.md`))).toBe(true);
+    const prompt = fs.readFileSync(argvLog, "utf8");
+    const skill = /(\S*SKILL-x\.md)/.exec(prompt)?.[1];
+    expect(skill && fs.existsSync(skill)).toBe(true);
+    expect(prompt).not.toMatch(/SKILL\.md/);
+    expect(prompt).not.toContain("Mode: COMPANY");
+    expect(prompt).not.toContain("PERSONAL-ONLY");
+    const result = JSON.parse(fs.readFileSync(path.join(xDir, "x", ".last_generate.json"), "utf8"));
+    expect(result).toMatchObject({ ok: true, date: stamp, code: 0 });
+    expect(fs.readFileSync(path.join(xDir, "x", ".run.log"), "utf8")).toContain("5 X drafts ready");
+    expect(fs.readdirSync(xDir).filter((f) => f.endsWith(".md"))).toHaveLength(0);
+    expect(fs.existsSync(path.join(xDir, ".last_generate.json"))).toBe(false);
+  }, 20_000);
+
+  it("with the channel unset the prompt and paths are the LinkedIn ones", () => {
+    const stamp = "2031-02-02_000000";
+    run(stamp, { SHIPPOST_COMPANY_MODE: "0" });
+    expect(fs.existsSync(path.join(xDir, `${stamp}.md`))).toBe(true);
+    const prompt = fs.readFileSync(argvLog, "utf8");
+    expect(prompt).toContain("PERSONAL-ONLY");
+    expect(prompt).not.toContain("SKILL-x.md");
+    expect(fs.readFileSync(path.join(xDir, ".run.log"), "utf8")).toContain("notify: 5 drafts ready");
+  }, 20_000);
+
+  it("harvest on the X channel prints the X corpus first and labels the LinkedIn one", () => {
+    fs.writeFileSync(path.join(xDir, "recent-posts.md"), "A long form linkedin post about queues.\n");
+    fs.writeFileSync(path.join(xDir, "x", "recent-posts.md"), "short x post about queues\n");
+    const out = sh("harvest.sh", { SHIPPOST_CONFIG: xCfg, SHIPPOST_CHANNEL: "x" });
+    expect(out.indexOf("YOUR RECENT X POSTS")).toBeGreaterThan(-1);
+    expect(out.indexOf("YOUR RECENT X POSTS")).toBeLessThan(out.indexOf("long-form, match the voice, not the length"));
+    expect(out).toContain("short x post about queues");
+  }, 20_000);
+});
+
+describe("harvest.sh RECENT DRAFTS on the X channel", () => {
+  it("lists X drafts and the latest LinkedIn ones, and stays quiet on stderr", () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "shippost-xh-"));
+    fs.mkdirSync(path.join(d, "x"), { recursive: true });
+    fs.writeFileSync(path.join(d, "2031-03-01_000000.md"), "# t\n## Option 1 - lesson - linkedin topic   (7/10)\n");
+    fs.writeFileSync(path.join(d, "x", "2031-03-02_000000.md"), "# t\n## Option 1 - lesson - x topic   (7/10)\n");
+    const cfg = path.join(d, "config.json");
+    fs.writeFileSync(cfg, JSON.stringify({ author: { name: "T" }, brand: { name: "B" }, harvest: { repoAllowlistFile: "none.txt", skillsRoot: path.join(d, "s") }, output: { draftsDir: d } }));
+    const res = spawnSync("bash", [path.join(repoRoot, "engine", "harvest.sh")], { env: { ...process.env, SHIPPOST_CONFIG: cfg, SHIPPOST_CHANNEL: "x" }, encoding: "utf8" });
+    expect(res.stderr).not.toContain("bad substitution");
+    expect(res.stdout).toContain("x topic");
+    expect(res.stdout).toContain("linkedin topic");
+    fs.rmSync(d, { recursive: true, force: true });
+  }, 20_000);
 });

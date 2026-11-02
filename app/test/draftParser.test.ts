@@ -642,3 +642,30 @@ _Why it works:_ concrete.
     expect(opt.why).toBe("concrete.");
   });
 });
+
+describe("X draft shape (B is a thread)", () => {
+  const X_DRAFT = `# X drafts - 2026-11-01
+
+## ⭐ Option 1 - lesson - small queue fix   (8.5/10)
+**A. Company post**
+Fixed the queue so it survives a restart. Took one line.
+
+**B. Thread**
+2/ The bug: state lived in memory only.
+
+3/ The fix: write it to disk on every change.
+
+**C. First comment**
+https://example.com/queue
+
+_Why it works:_ concrete.
+`;
+  it("parses B. Thread into repostCaption, stops A at it, keeps C", () => {
+    const o = parseDraft(X_DRAFT).options[0];
+    expect(o.companyPost).toBe("Fixed the queue so it survives a restart. Took one line.");
+    expect(o.repostCaption).toContain("2/ The bug");
+    expect(o.repostCaption).toContain("3/ The fix");
+    expect(o.repostCaption).not.toContain("example.com");
+    expect(o.firstComment).toBe("https://example.com/queue");
+  });
+});

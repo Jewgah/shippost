@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import type { DraftOption } from "@/lib/draftParser";
 import OptionCard from "./OptionCard";
+import XOptionCard from "./XOptionCard";
+import type { Channel } from "@/lib/channel";
 
 // Lay the ranked options side-by-side in a horizontal, snap-scrolling rail so all five
 // are scannable at a glance (vs. a tall vertical stack). Prev/next + dots + ←/→ keys.
@@ -20,6 +22,7 @@ export default function DraftCarousel({
   builtCarousels = [],
   hasCompanyPage = false,
   commentLinks,
+  channel = "linkedin",
 }: {
   options: DraftOption[];
   date: string;
@@ -34,6 +37,7 @@ export default function DraftCarousel({
   builtCarousels?: number[];
   hasCompanyPage?: boolean;
   commentLinks?: CommentLinks;
+  channel?: Channel;
 }) {
   const reduce = useReducedMotion();
   const railRef = useRef<HTMLDivElement>(null);
@@ -123,6 +127,9 @@ export default function DraftCarousel({
         >
           {options.map((o, i) => (
             <div key={o.n || i} className="h-[72vh] w-full max-w-[600px] shrink-0 snap-center">
+              {channel === "x" ? (
+                <XOptionCard option={o} date={date} initiallyRejected={rejectedOptions.includes(o.n)} />
+              ) : (
               <OptionCard
                 option={o}
                 date={date}
@@ -139,6 +146,7 @@ export default function DraftCarousel({
                 hasCompanyPage={hasCompanyPage}
                 commentLinks={commentLinks}
               />
+              )}
             </div>
           ))}
         </div>

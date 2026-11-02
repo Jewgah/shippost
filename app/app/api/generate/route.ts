@@ -7,18 +7,21 @@ import { blockCrossSite } from "@/lib/guard";
 import { PILLAR_LABELS } from "@/lib/theme";
 import { cleanField } from "@/lib/steering";
 import { readSettings } from "@/lib/settings";
+import { channelPaths, resolveChannel, type Channel } from "@/lib/channel";
 import { acquireRunLock, releaseRunLock, STALE_MS } from "@/lib/runLock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function paths() {
+function paths(channel: Channel = "linkedin") {
   const { resolved } = loadConfig();
+  const cp = channelPaths(channel);
   return {
-    draftsDir: resolved.draftsDir,
+    draftsDir: cp.dir,
     repoRoot: resolved.repoRoot,
+    // One lock for both channels (always in the root): a single headless run at a time.
     lock: path.join(resolved.draftsDir, ".generating"),
-    result: path.join(resolved.draftsDir, ".last_generate.json"),
+    result: cp.result,
   };
 }
 
@@ -38,8 +41,10 @@ function readRunning(lock: string): { running: boolean; startedAt: number | null
   return { running: Date.now() - stat.mtimeMs < STALE_MS, startedAt };
 }
 
-export async function GET() {
-  const { lock, result } = paths();
+export async function GET(req: Request) {
+  const channel = resolveChannel(new URL(req.url).searchParams.get("channel"));
+  if (!channel) return NextResponse.json({ error: "unknown channel" }, { status: 400 });
+  const { lock, result } = paths(channel);
   const { running, startedAt } = readRunning(lock);
   let lastResult: unknown = null;
   if (fs.existsSync(result)) {
@@ -63,12 +68,14 @@ export async function POST(req: Request) {
   } catch {
     /* no/invalid body — run with defaults */
   }
+  const channel = resolveChannel(body.channel);
+  if (!channel) return NextResponse.json({ error: "unknown channel" }, { status: 400 });
   const direction = cleanField(body.direction, 500);
   const project = cleanField(body.project, 100);
   let category = cleanField(body.category, 100);
   if (category && !(category in PILLAR_LABELS)) category = undefined; // ignore unknown pillars
 
-  const { draftsDir, repoRoot, lock, result } = paths();
+  const { draftsDir, repoRoot, lock, result } = paths(channel);
   fs.mkdirSync(draftsDir, { recursive: true });
 
   const token = acquireRunLock(lock);
@@ -82,6 +89,7 @@ export async function POST(req: Request) {
     env: {
       ...process.env,
       SHIPPOST_STAMP: date,
+      ...(channel === "x" ? { SHIPPOST_CHANNEL: "x" } : {}),
       SHIPPOST_COMPANY_MODE: readSettings().companyMode ? "1" : "0",
       ...(direction ? { SHIPPOST_FOCUS: direction } : {}),
       ...(project ? { SHIPPOST_PROJECT: project } : {}),

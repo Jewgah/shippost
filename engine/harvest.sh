@@ -12,6 +12,9 @@ source "$SELF_DIR/lib/config.sh"
 DAYS="${1:-$CFG_HARVEST_DAYS}"
 BOOST_DIR="$CFG_OUTPUT_DIR"
 RECENT_POSTS="$BOOST_DIR/$CFG_RECENT_POSTS_FILE"
+# SHIPPOST_CHANNEL=x: X has its own drafts, rejects and voice corpus in the x/ subfolder.
+CHANNEL="${SHIPPOST_CHANNEL:-linkedin}"
+X_DIR="$BOOST_DIR/x"
 VOICE_SAMPLE="$BOOST_DIR/$CFG_VOICE_SAMPLE_FILE"
 
 mkdir -p "$BOOST_DIR"
@@ -147,19 +150,31 @@ echo "    client result, never an invented case study."
 # ---------- ANTI-REPETITION: recent drafts ----------
 echo
 echo "### RECENT DRAFTS — option topics already offered (do NOT repeat these)"
+# Draft files whose option topics are listed below. On the X channel: the X drafts, then the latest
+# LinkedIn ones, so X does not re-post the same week topic verbatim. (A function, not an inline
+# block in the process substitution: bash 3.2 on macOS mis-parses quotes inside <( ... ).)
+recent_draft_files() {
+  if [ "$CHANNEL" = "x" ]; then
+    ls -1t "$X_DIR"/*.md 2>/dev/null | head -"$CFG_RECENT_DRAFTS"
+    ls -1t "$BOOST_DIR"/*.md 2>/dev/null | head -3
+  else
+    ls -1t "$BOOST_DIR"/*.md 2>/dev/null | head -"$CFG_RECENT_DRAFTS"
+  fi
+}
 found=0
 while IFS= read -r d; do
   [ -n "$d" ] || continue
   echo "  --- $(basename "$d") ---"
   grep '^## ' "$d" 2>/dev/null | sed 's/^## /    /'
   found=1
-done < <(ls -1t "$BOOST_DIR"/*.md 2>/dev/null | head -"$CFG_RECENT_DRAFTS")
+done < <(recent_draft_files)
 [ "$found" -eq 0 ] && echo "  (none yet — this is the first run)"
 
 # ---------- REJECTED ANGLES: options the author thumbed down in the app ----------
 # Written by the app's "Not for me" button to .rejects.jsonl (one JSON object per line).
 # We surface the recent rejected topics so the model avoids them and close variants.
 REJECTS_LOG="$BOOST_DIR/.rejects.jsonl"
+[ "$CHANNEL" = "x" ] && REJECTS_LOG="$X_DIR/.rejects.jsonl"
 if [ -f "$REJECTS_LOG" ]; then
   # length<=120 guards against a pathological topic bloating (or injecting structure into) the prompt
   rejected="$(tail -n 60 "$REJECTS_LOG" 2>/dev/null | jq -r '.topic // empty' 2>/dev/null | awk 'NF && length<=120' | sort -u)"
@@ -170,11 +185,12 @@ if [ -f "$REJECTS_LOG" ]; then
   fi
 fi
 
-# ---------- YOUR RECENT LINKEDIN POSTS (capped) ----------
+# ---------- YOUR RECENT POSTS (capped) ----------
 # FIX: only inject the last N posts so this can't grow unbounded and flood the prompt.
-if [ -f "$RECENT_POSTS" ]; then
+print_corpus() { # $1 = file, $2 = heading
+  [ -f "$1" ] || return 0
   echo
-  echo "### YOUR RECENT LINKEDIN POSTS — match this voice AND do not repeat these themes"
+  echo "### $2"
   echo "    (most recent $CFG_RECENT_POSTS_MAX shown)"
   awk -v max="$CFG_RECENT_POSTS_MAX" '
     function flush() { if (cur ~ /[^[:space:]]/) blocks[++n]=cur; cur="" }
@@ -185,7 +201,14 @@ if [ -f "$RECENT_POSTS" ]; then
       start = (n > max) ? n - max + 1 : 1
       for (i = start; i <= n; i++) printf "%s\n---\n", blocks[i]
     }
-  ' "$RECENT_POSTS" | sed 's/^/  /'
+  ' "$1" | sed 's/^/  /'
+}
+if [ "$CHANNEL" = "x" ]; then
+  # The X corpus first (the short-form voice), then the LinkedIn one as a voice seed only.
+  print_corpus "$X_DIR/$CFG_RECENT_POSTS_FILE" "YOUR RECENT X POSTS - match this voice AND do not repeat these themes"
+  print_corpus "$RECENT_POSTS" "YOUR RECENT LINKEDIN POSTS - long-form, match the voice, not the length"
+else
+  print_corpus "$RECENT_POSTS" "YOUR RECENT LINKEDIN POSTS — match this voice AND do not repeat these themes"
 fi
 
 # ---------- VOICE SAMPLE (optional) ----------

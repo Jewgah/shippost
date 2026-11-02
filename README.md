@@ -156,6 +156,10 @@ First launch walks you through importing your LinkedIn posts — see
     `launchctl load -w ~/Library/LaunchAgents/<your-label>.plist`.
   - **Linux:** see `engine/schedule/crontab.example`.
 
+## X (Twitter) drafts
+
+The top bar has a `LinkedIn | X` switch. The X tab has its own Generate button, its own draft list and its own "I posted this" log, all stored in an `x/` folder inside your drafts folder, so the LinkedIn side is untouched. Each option is one post of at most 280 characters (counted the way X counts: a link is 23, an emoji or a CJK character is 2), an optional thread of 2 to 5 posts, and the link in a first reply. "Open in X" opens X's compose window with the post prefilled; you press Post yourself. The scheduled run stays LinkedIn-only, and your LinkedIn posts seed the X voice until you have X posts of your own.
+
 ## Publish ritual (~2 min)
 
 1. Open the app, click today's draft.
