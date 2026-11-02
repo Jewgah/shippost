@@ -2,6 +2,16 @@
 
 A running log of notable changes, most recent first.
 
+## docs: the 4:5 video rule works for anyone, not one machine (2026-11-02)
+
+**Problem:** The SKILL's new "4:5 for LinkedIn" paragraph (9e08c02) named one author's absolute marketing-studio path and folder layout in a public repo, so for every other user it pointed at a tool and a command they do not have. It also contradicted the rule right above it ("only write this line with a path the author gave you"), matched "the same asset" by file name alone (a launch video's 4:5 cut sits next to an unrelated social clip of the same aspect), assumed `ffprobe` exists, and put its warning in a finish message a headless run never writes.
+
+**Solution:** The taller cut is looked for beside the attached file (same folder, or a `matrix/` folder inside it) and is only taken when its duration matches the original within 1 s, checked with the same `ffprobe` call; a cut checked that way explicitly counts as the author's path. No `ffprobe` means the file is kept as given. The swap, or the absence of a taller cut, is reported in the finish message on an interactive run and on the draft's `>` line on a headless one. Checked on a real pair: `launch-video.mp4` and `matrix/launch-4x5.mp4` are both 55.317 s, the unrelated `social-4x5.mp4` is 10.048 s and is rejected.
+
+**Files changed:** engine/SKILL.md, ROADMAP.md
+
+---
+
 ## feat: a queued post can carry your own video as candidate 5 (2026-10-21)
 
 **Problem:** A queued post could only go out with what the pipeline made for it: three rendered images (1-3) and, when config `video` is set, the generated PostClip (4). A finished video the author already had (a product demo, a screen recording) had no way in, short of posting by hand outside the queue.
