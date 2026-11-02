@@ -106,7 +106,7 @@ Real people don't write like polished marketing copy. Pass every draft through t
 Write to the exact path the wrapper passed (or `<draftsDir>/YYYY-MM-DD.md`). **The first line must be the header below.** Each option's header line must read `## [⭐ ]Option N — {pillar} — {2-4 word topic}   ({score}/10)` so the harvester (and the app) can read topics next time.
 
 ```
-# LinkedIn drafts — 2026-05-31 · 5 options, ranked · pick ONE
+# LinkedIn drafts - 2026-05-31 · 5 options, ranked · pick ONE
 
 > Post section A to your company page, then Repost-with-thoughts to your
 > profile using section B, then drop section C as the first comment.

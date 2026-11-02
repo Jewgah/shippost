@@ -6,7 +6,9 @@ import { X_LIMIT, splitThread, xComposeUrl, xLength } from "@/lib/xText";
 import { PillarTag, ScoreBadge, StarBadge } from "./badges";
 
 // One X option: the post, an optional numbered thread, the first-reply link, and the actions.
-// Nothing is posted by the app: "Open in X" hands the text to X's own compose window.
+// "Open in X" hands the post to X's own compose window (text only). "Add to queue" puts the option
+// in the X queue (top bar), which renders its 16:9 images and posts the whole chain through the X
+// API on a click there.
 
 function PostBox({ label, text, openInX }: { label: string; text: string; openInX?: boolean }) {
   const [copied, setCopied] = useState(false);
@@ -71,6 +73,7 @@ export default function XOptionCard({
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   const [posted, setPosted] = useState(false);
+  const [queued, setQueued] = useState(false);
   const [rejected, setRejected] = useState(initiallyRejected);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -110,6 +113,14 @@ export default function XOptionCard({
       repostCaption: option.repostCaption,
     });
     if (j) setPosted(true);
+  };
+
+  // The post, its thread and its link reply as written in the draft; the queue renders the images.
+  const addToQueue = async () => {
+    const j = await call("/api/x-queue", { date, option: option.n, text: option.companyPost, thread, reply: option.firstComment });
+    if (!j) return;
+    setQueued(true);
+    window.dispatchEvent(new Event("shippost:queue-changed"));
   };
 
   const markRejected = async () => {
@@ -189,6 +200,9 @@ export default function XOptionCard({
       )}
 
       <footer className="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" className={btn} onClick={addToQueue} disabled={busy || queued}>
+          {queued ? "✓ queued" : "Add to queue"}
+        </button>
         <button type="button" className={btn} onClick={markPosted} disabled={busy || posted}>
           {posted ? "✓ logged" : "I posted this"}
         </button>

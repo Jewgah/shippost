@@ -3,7 +3,12 @@
  * render-variants.mjs - render the 3 candidate images of ONE queued LinkedIn post.
  *
  * Usage:
- *   node engine/render-variants.mjs --job <id>
+ *   node engine/render-variants.mjs --job <id> [--channel x]
+ *
+ * `--channel x` is the X queue (POST /api/x-queue): the item is read from <draftsDir>/x/.queue/,
+ * the draft from <draftsDir>/x/<draft>.md, the images go to <draftsDir>/x/.visuals/ at 1600x900
+ * (16:9) and the progress file is x/.queue/<id>.render.json. The clip stays 4:5 and no comment
+ * cards are cut (they are a LinkedIn comment feature). Without the flag nothing changes.
  *
  * Reads the queue item <draftsDir>/.linkedin/<id>.json (written by POST /api/linkedin, which
  * spawns this detached), takes the option's AI prompts from <draftsDir>/<draft>.md through
@@ -206,7 +211,7 @@ export async function cutCards({ id, visualsDir, queueDir }) {
 }
 
 /** Render <id>-v4.mp4 with marketing-studio. Resolves null on success, else the error to show. */
-export async function renderClip({ id, item, cfg, studio, visualsDir, queueDir }) {
+export async function renderClip({ id, item, cfg, studio, visualsDir, queueDir, cards = true }) {
   const { clipProps, fallbackScript, parseScript, pickTrack, scriptPrompt } = await import(
     pathToFileURL(join(ROOT, 'app', 'lib', 'clipProps.ts')).href
   );
@@ -250,7 +255,7 @@ export async function renderClip({ id, item, cfg, studio, visualsDir, queueDir }
     const r = await run(remotion, ['render', 'PostClip', tmp, `--props=${propsFile}`], { cwd: studioApp, env: process.env }, REMOTION_TIMEOUT_MS);
     if (r.code !== 0) return `video: ${lastLine(r.stderr) || `remotion exited ${r.code}`}`;
     renameSync(tmp, join(visualsDir, `${id}-v4.mp4`));
-    await cutCards({ id, visualsDir, queueDir });
+    if (cards) await cutCards({ id, visualsDir, queueDir });
     log(`job ${id}: video rendered (${script ? "claude's script" : 'fallback script'}, ${track ?? 'no music'})`);
     return null;
   } finally {
@@ -274,15 +279,21 @@ async function main() {
   const args = process.argv.slice(2);
   const i = args.indexOf('--job');
   const id = i >= 0 ? args[i + 1] ?? '' : '';
-  if (!/^[A-Za-z0-9_-]{1,120}$/.test(id)) {
-    console.error('usage: render-variants.mjs --job <id>');
+  const c = args.indexOf('--channel');
+  const channel = c >= 0 ? args[c + 1] ?? '' : 'linkedin';
+  if (!/^[A-Za-z0-9_-]{1,120}$/.test(id) || (channel !== 'linkedin' && channel !== 'x')) {
+    console.error('usage: render-variants.mjs --job <id> [--channel x]');
     return 1;
   }
+  const isX = channel === 'x';
 
   const cfg = loadConfig();
   const draftsDir = expandTilde(cfg?.output?.draftsDir || '~/Downloads/shippost-drafts');
-  const queueDir = join(draftsDir, '.linkedin');
-  const visualsDir = join(draftsDir, '.visuals');
+  // X keeps everything under x/ (app/lib/linkedinQueue.ts queueDir/visualsDir); the lock stays shared: one GPU.
+  const channelDir = isX ? join(draftsDir, 'x') : draftsDir;
+  const queueDir = isX ? join(channelDir, '.queue') : join(draftsDir, '.linkedin');
+  const visualsDir = join(channelDir, '.visuals');
+  const size = isX ? ['--size', '1600x900'] : [];
   const lock = join(draftsDir, '.rendering');
   const stateFile = join(queueDir, `${id}.render.json`);
   const setState = (s) => {
@@ -303,7 +314,7 @@ async function main() {
   }
   let md;
   try {
-    md = readFileSync(join(draftsDir, `${item.draft}.md`), 'utf8');
+    md = readFileSync(join(channelDir, `${item.draft}.md`), 'utf8');
   } catch {
     setState({ state: 'failed', done: 0, error: `the draft ${item.draft} is gone` });
     return 1;
@@ -333,7 +344,7 @@ async function main() {
   let have = onDisk();
   if (have.done === total) {
     // Clips rendered before the comment cards existed get theirs here (cheap, no lock needed).
-    if (have.videoDone && !existsSync(join(visualsDir, `${id}-card-post.gif`))) await cutCards({ id, visualsDir, queueDir });
+    if (!isX && have.videoDone && !existsSync(join(visualsDir, `${id}-card-post.gif`))) await cutCards({ id, visualsDir, queueDir });
     setState({ state: 'done', done: total, total });
     log(`job ${id}: every candidate is already rendered`);
     return 0;
@@ -395,7 +406,7 @@ async function main() {
       const r = await run(
         process.execPath,
         [join(ROOT, 'engine', 'render-visual.mjs'), '--draft', item.draft, '--option', String(item.option),
-          '--seed', String(seed), '--out-dir', visualsDir, '--out-file', `${id}-v${v + 1}.png`],
+          '--seed', String(seed), '--out-dir', visualsDir, '--out-file', `${id}-v${v + 1}.png`, ...size],
         { cwd: ROOT, env: { ...process.env, SHIPPOST_RENDER_PROMPT: prompt, SHIPPOST_COMFY_URL: base } }
       );
       if (r.code === 0) done++;
@@ -408,7 +419,7 @@ async function main() {
       setState({ state: 'rendering', done, total, note: 'rendering the video' });
       let err;
       try {
-        err = await renderClip({ id, item, cfg, studio, visualsDir, queueDir });
+        err = await renderClip({ id, item, cfg, studio, visualsDir, queueDir, cards: !isX });
       } catch (e) {
         // A throw still ends in a final state: render.json must never stay at "rendering".
         err = `video: ${(e && e.message) || e}`;

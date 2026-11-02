@@ -8,15 +8,17 @@
  *
  * Usage:
  *   node engine/render-visual.mjs --draft 2026-09-06_145923 --option 1 \
- *        [--prompt "…"] [--out-dir DIR] [--seed N] [--out-file NAME.png]
+ *        [--prompt "…"] [--out-dir DIR] [--seed N] [--out-file NAME.png] [--size WxH]
  *
  *   --prompt   also read from $SHIPPOST_RENDER_PROMPT
  *   --out-dir  also from $SHIPPOST_VISUALS_DIR, else <config output.draftsDir>/.visuals
  *   base URL   $SHIPPOST_COMFY_URL (default http://127.0.0.1:8188)
  *
  *   --out-file a bare file name inside out-dir (engine/render-variants.mjs writes <job>-vN.png)
+ *   --size     the PNG's size, default 1080x1350 (LinkedIn's tallest in-feed ratio); the X queue
+ *              passes 1600x900 (16:9). The latent is picked by latentFor() below.
  *
- * Writes <out-dir>/<draftId>-o<N>.png (or --out-file) at 1080x1350 (LinkedIn's tallest in-feed ratio).
+ * Writes <out-dir>/<draftId>-o<N>.png (or --out-file) at --size.
  *
  * Model notes (measured on this install, do not "optimize" away):
  *  - flux1-schnell wants 4 steps at cfg 1.0, euler/simple. The negative prompt is required by
@@ -72,14 +74,47 @@ export const errorFromHistory = (history, promptId) => {
  * backslash (both ordinary in an art prompt) would produce an unparseable graph, and the seed
  * has to reach ComfyUI as a JSON number because KSampler's `seed` input is typed INT.
  */
-export const buildGraph = (templateText, prompt, seed) => {
+export const buildGraph = (templateText, prompt, seed, latent = null) => {
   const graph = JSON.parse(templateText);
   if (graph['2']?.class_type !== 'CLIPTextEncode' || graph['4']?.class_type !== 'KSampler') {
     throw new Error('workflow template changed shape: node 2 must be CLIPTextEncode, node 4 KSampler');
   }
   graph['2'].inputs.text = String(prompt);
   graph['4'].inputs.seed = Number(seed);
+  if (latent) {
+    if (graph['3']?.class_type !== 'EmptySD3LatentImage') throw new Error('workflow template changed shape: node 3 must be EmptySD3LatentImage');
+    graph['3'].inputs.width = latent[0];
+    graph['3'].inputs.height = latent[1];
+  }
   return graph;
+};
+
+// The template's latent, 1088x1360: the pixel budget every size is rendered at.
+const LATENT_AREA = 1088 * 1360;
+
+/**
+ * The flux latent for an output of w x h: both sides multiples of 16, the EXACT aspect of the
+ * output when such a pair exists (then the nearest one to the template's pixel budget), else the
+ * nearest rounding. 1080x1350 gives 1088x1360 (the template's own), 1600x900 gives 1536x864.
+ */
+export const latentFor = (w, h) => {
+  let best = null;
+  for (let lw = 256; lw <= 2048; lw += 16) {
+    const lh = (lw * h) / w;
+    if (!Number.isInteger(lh) || lh % 16 !== 0 || lh < 256 || lh > 2048) continue;
+    if (!best || Math.abs(lw * lh - LATENT_AREA) < Math.abs(best[0] * best[1] - LATENT_AREA)) best = [lw, lh];
+  }
+  if (best) return best;
+  const lw = Math.max(256, Math.round(Math.sqrt((LATENT_AREA * w) / h) / 16) * 16);
+  return [lw, Math.max(256, Math.round((lw * h) / w / 16) * 16)];
+};
+
+/** `--size WxH` as [w, h], or null for anything else (each side 64 to 4096 px). */
+export const parseSize = (s) => {
+  const m = /^(\d{2,4})x(\d{2,4})$/.exec(String(s ?? ''));
+  if (!m) return null;
+  const [w, h] = [Number(m[1]), Number(m[2])];
+  return w >= 64 && h >= 64 && w <= 4096 && h <= 4096 ? [w, h] : null;
 };
 
 const expandTilde = (p) => (p === '~' ? homedir() : p.startsWith('~/') ? join(homedir(), p.slice(2)) : p);
@@ -128,7 +163,7 @@ const loadSharp = () => {
   }
 };
 
-export async function renderVisual({ draftId, option, prompt, outDir, seed, outFile }) {
+export async function renderVisual({ draftId, option, prompt, outDir, seed, outFile, size = [1080, 1350] }) {
   // Fail on a missing resize dependency BEFORE burning a minute of GPU time on an image
   // we could not then size correctly.
   const sharp = loadSharp();
@@ -143,7 +178,7 @@ export async function renderVisual({ draftId, option, prompt, outDir, seed, outF
   }
 
   const template = readFileSync(join(HERE, 'workflows', 'linkedin-hero-flux.json'), 'utf8');
-  const graph = buildGraph(template, prompt, seed);
+  const graph = buildGraph(template, prompt, seed, latentFor(size[0], size[1]));
 
   let queued = {};
   try {
@@ -203,8 +238,8 @@ export async function renderVisual({ draftId, option, prompt, outDir, seed, outF
   mkdirSync(outDir, { recursive: true });
   const dest = join(outDir, outputFileName(draftId, option, outFile));
   const tmp = `${dest}.tmp`;
-  // 1088x1360 in, 1080x1350 out. Written tmp-then-rename so a reader never sees a partial PNG.
-  const resized = await sharp(bytes).resize(1080, 1350, { fit: 'cover' }).png().toBuffer();
+  // The latent in (1088x1360 for the default), --size out. Written tmp-then-rename so a reader never sees a partial PNG.
+  const resized = await sharp(bytes).resize(size[0], size[1], { fit: 'cover' }).png().toBuffer();
   writeFileSync(tmp, new Uint8Array(resized));
   renameSync(tmp, dest);
 
@@ -242,6 +277,8 @@ if (isMain) {
   const seedArg = flag(args, '--seed');
   const seed = seedArg ? Number(seedArg) : Math.floor(Math.random() * 2 ** 31);
   const outFile = flag(args, '--out-file');
+  const sizeArg = flag(args, '--size');
+  const size = sizeArg === null ? [1080, 1350] : parseSize(sizeArg);
 
   if (!draftId || !/^\d{4}-\d{2}-\d{2}(_(\d{6}|(?=.{1,40}$)(?=.*[a-z])[a-z0-9]+(-[a-z0-9]+)*))?$/ /* mirrors app/lib/draftId.ts: date, date_HHMMSS, or date_<product-slug> */.test(draftId)) {
     console.error('usage: render-visual.mjs --draft <YYYY-MM-DD[_HHMMSS|_slug]> --option <N> [--prompt "…"]');
@@ -259,5 +296,9 @@ if (isMain) {
     console.error('--out-file must be a bare file name ending in .png');
     process.exit(1);
   }
-  process.exit(await renderVisual({ draftId, option, prompt, outDir: resolve(outDir), seed, outFile }));
+  if (!size) {
+    console.error('--size must be WxH, each side 64 to 4096 (e.g. 1600x900)');
+    process.exit(1);
+  }
+  process.exit(await renderVisual({ draftId, option, prompt, outDir: resolve(outDir), seed, outFile, size }));
 }

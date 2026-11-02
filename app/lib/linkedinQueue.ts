@@ -18,10 +18,15 @@ import { loadConfig } from "./config";
  *    set. Candidates are found by looking, never stored here;
  *  - attachVideo() (called by POST /api/linkedin when the option declares `_Video:_`) copies the
  *    author's own video to `<id>-v5.mp4`, and the item records the source path as `attachVideo`.
+ *
+ * The X queue (POST /api/x-queue, app/scripts/x-post.mjs) is the same shape under the `x/` folder:
+ * items in `<draftsDir>/x/.queue/`, candidates in `<draftsDir>/x/.visuals/`. Every path helper
+ * below takes an optional `channel`, "linkedin" by default, so a LinkedIn caller never changes.
  */
 
 export type QueueMode = "personal" | "company";
 export type QueueStatus = "queued" | "posting" | "posted" | "failed";
+export type QueueChannel = "linkedin" | "x";
 
 export interface QueueItem {
   id: string;
@@ -53,6 +58,14 @@ export interface QueueItem {
   reposted?: boolean;
   /** The author's own video the option declared (`_Video:_`), copied to candidate 5. Provenance only: posting reads the copy. */
   attachVideo?: string;
+  /** Set on X items only. LinkedIn items have no `channel` field (they predate it). */
+  channel?: "x";
+  /** X: the replies after the post, in order. `text` is the post, `comment` the link reply. */
+  thread?: string[];
+  /** X: the ids posted so far, in chain order, so a retry continues the chain and never re-posts. */
+  xIds?: string[];
+  /** X: the first post's address once posted. */
+  url?: string;
 }
 
 export interface RenderState {
@@ -73,18 +86,23 @@ const isVideoCandidate = (v: number) => v === VIDEO || v === ATTACHED;
 /** Item ids are built server-side, but they also arrive in query strings: only this shape is used in a path. */
 export const isQueueId = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{1,120}$/.test(id);
 
-export function queueDir(): string {
-  return path.join(loadConfig().resolved.draftsDir, ".linkedin");
+export function queueDir(channel: QueueChannel = "linkedin"): string {
+  const { draftsDir } = loadConfig().resolved;
+  return channel === "x" ? path.join(draftsDir, "x", ".queue") : path.join(draftsDir, ".linkedin");
 }
 
-export function visualsDir(): string {
-  return path.join(loadConfig().resolved.draftsDir, ".visuals");
+export function visualsDir(channel: QueueChannel = "linkedin"): string {
+  const { draftsDir } = loadConfig().resolved;
+  return channel === "x" ? path.join(draftsDir, "x", ".visuals") : path.join(draftsDir, ".visuals");
 }
 
-export const itemPath = (id: string) => path.join(queueDir(), `${id}.json`);
-export const renderStatePath = (id: string) => path.join(queueDir(), `${id}.render.json`);
+const channelOf = (item: QueueItem): QueueChannel => (item.channel === "x" ? "x" : "linkedin");
+
+export const itemPath = (id: string, channel: QueueChannel = "linkedin") => path.join(queueDir(channel), `${id}.json`);
+export const renderStatePath = (id: string, channel: QueueChannel = "linkedin") => path.join(queueDir(channel), `${id}.render.json`);
 /** The candidate `v` of an item: images 1-3, the clip 4, the author's video 5. Built from a validated id and an integer only. */
-export const variantImagePath = (id: string, v: number) => path.join(visualsDir(), `${id}-v${v}.${isVideoCandidate(v) ? "mp4" : "png"}`);
+export const variantImagePath = (id: string, v: number, channel: QueueChannel = "linkedin") =>
+  path.join(visualsDir(channel), `${id}-v${v}.${isVideoCandidate(v) ? "mp4" : "png"}`);
 
 /**
  * The size cap on an attached video. /api/asset reads a candidate whole into memory on every
@@ -132,10 +150,10 @@ export function attachVideo(id: string, file: string): string {
   return dest;
 }
 
-export function readItem(id: string): QueueItem | null {
+export function readItem(id: string, channel: QueueChannel = "linkedin"): QueueItem | null {
   if (!isQueueId(id)) return null;
   try {
-    return JSON.parse(fs.readFileSync(itemPath(id), "utf8")) as QueueItem;
+    return JSON.parse(fs.readFileSync(itemPath(id, channel), "utf8")) as QueueItem;
   } catch {
     return null;
   }
@@ -143,24 +161,30 @@ export function readItem(id: string): QueueItem | null {
 
 /** tmp-then-rename, so a reader (the poller, the runner) never sees half a JSON file. */
 export function writeItem(item: QueueItem): void {
-  fs.mkdirSync(queueDir(), { recursive: true });
-  const file = itemPath(item.id);
+  const channel = channelOf(item);
+  fs.mkdirSync(queueDir(channel), { recursive: true });
+  const file = itemPath(item.id, channel);
   fs.writeFileSync(`${file}.tmp`, JSON.stringify(item, null, 2));
   fs.renameSync(`${file}.tmp`, file);
 }
 
-/** Every item, oldest first. `<id>.render.json` and other side files never match the name test. */
-export function listQueue(): QueueItem[] {
+/**
+ * Every item of one channel, oldest first. `<id>.render.json` and other side files never match the
+ * name test. The folder decides the channel; LinkedIn also skips an item marked `channel: "x"`,
+ * so an X item that landed in `.linkedin/` is never listed, and so never posted, there.
+ */
+export function listQueue(channel: QueueChannel = "linkedin"): QueueItem[] {
   let files: string[] = [];
   try {
-    files = fs.readdirSync(queueDir()).filter((f) => /^[A-Za-z0-9_-]+\.json$/.test(f));
+    files = fs.readdirSync(queueDir(channel)).filter((f) => /^[A-Za-z0-9_-]+\.json$/.test(f));
   } catch {
     return []; // no queue yet
   }
   const items: QueueItem[] = [];
   for (const f of files) {
-    const item = readItem(f.slice(0, -".json".length));
-    if (item && typeof item.id === "string" && typeof item.status === "string") items.push(item);
+    const item = readItem(f.slice(0, -".json".length), channel);
+    if (item && typeof item.id === "string" && typeof item.status === "string" && (channel === "x" || channelOf(item) === "linkedin"))
+      items.push(channel === "x" ? { ...item, channel: "x" } : item);
   }
   return items.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || a.id.localeCompare(b.id));
 }
@@ -182,15 +206,15 @@ export function cardsFor(id: string): Record<CardKind, boolean> {
 }
 
 /** Which candidates (images 1-3, clip 4, the author's video 5) exist on disk right now. */
-export function imagesFor(id: string): number[] {
+export function imagesFor(id: string, channel: QueueChannel = "linkedin"): number[] {
   if (!isQueueId(id)) return [];
-  return CANDIDATES.filter((v) => fs.existsSync(variantImagePath(id, v)));
+  return CANDIDATES.filter((v) => fs.existsSync(variantImagePath(id, v, channel)));
 }
 
-export function readRenderState(id: string): RenderState | null {
+export function readRenderState(id: string, channel: QueueChannel = "linkedin"): RenderState | null {
   if (!isQueueId(id)) return null;
   try {
-    return JSON.parse(fs.readFileSync(renderStatePath(id), "utf8")) as RenderState;
+    return JSON.parse(fs.readFileSync(renderStatePath(id, channel), "utf8")) as RenderState;
   } catch {
     return null;
   }

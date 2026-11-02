@@ -158,7 +158,26 @@ First launch walks you through importing your LinkedIn posts — see
 
 ## X (Twitter) drafts
 
-The top bar has a `LinkedIn | X` switch. The X tab has its own Generate button, its own draft list and its own "I posted this" log, all stored in an `x/` folder inside your drafts folder, so the LinkedIn side is untouched. Each option is one post of at most 280 characters (counted the way X counts: a link is 23, an emoji or a CJK character is 2), an optional thread of 2 to 5 posts, and the link in a first reply. "Open in X" opens X's compose window with the post prefilled; you press Post yourself. The scheduled run stays LinkedIn-only, and your LinkedIn posts seed the X voice until you have X posts of your own.
+The top bar has a `LinkedIn | X` switch. The X tab has its own Generate button, its own draft list and its own "I posted this" log, all stored in an `x/` folder inside your drafts folder, so the LinkedIn side is untouched. Each option is one post of at most 280 characters (counted the way X counts: a link is 23, an emoji or a CJK character is 2), an optional thread of 2 to 5 posts, and the link in a first reply. "Open in X" opens X's compose window with the post prefilled (text only, X's compose link takes no image). "Add to queue" puts the option in the X queue (the queue icon in the top bar, on the X tab): it renders three 16:9 images (1600x900) from the option's one `_Suggested visuals:_` prompt, plus the 4:5 clip when `video` is configured (the clip has no 16:9 layout yet), and the Post button there publishes the post, its thread and its link reply through the X API. The scheduled run stays LinkedIn-only, and your LinkedIn posts seed the X voice until you have X posts of your own.
+
+### X posting (optional, uses the X API)
+
+Posting from the X queue goes through the official X API with your own developer keys. X charges per post (pay-per-use credits, with a spend cap you set; check the X developer pricing page), so nothing posts until you set this up:
+
+1. Create an X developer account and a project with an app at developer.x.com, using the X account you post from.
+2. In the app's settings, set the user authentication permissions to **Read and Write**.
+3. Generate the **API Key and Secret** (consumer keys) and the **Access Token and Secret** for your account. Generate the access token AFTER setting Read and Write, or it stays read-only.
+4. Buy credits and set a spend limit in the developer console.
+5. Save the four values in `~/.shippost/x-keys.json` (outside this repo), then run `chmod 600 ~/.shippost/x-keys.json`:
+
+   ```json
+   { "apiKey": "...", "apiSecret": "...", "accessToken": "...", "accessSecret": "..." }
+   ```
+
+6. Click **Check X keys** in the X queue (or run `node app/scripts/x-post.mjs --check`): it reads your account once and prints your handle.
+7. Post one queued option and check it on x.com.
+
+`node app/scripts/x-post.mjs --job <id> --dry-run` prints the chain a queued item would send, in order, without sending anything. Each post id is saved as soon as X returns it, so a chain that fails halfway keeps what went out: **Retry** in the queue puts it back, and Post continues after the last posted id. Not verified before the first real post: that X's v2 media upload accepts these OAuth 1.0a keys (if it answers 403 or 404 the poster tries the v1.1 upload endpoint once), and how X shows a 4:5 clip in the feed. The portal steps above follow X's developer docs and may be worded differently in the console.
 
 ## Publish ritual (~2 min)
 

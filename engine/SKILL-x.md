@@ -5,7 +5,7 @@ description: X (twitter) variant of the shippost engine. 5 ranked, distinct X po
 
 # shippost for X: 5 ranked options, one post each
 
-Follow `SKILL.md` (same folder) for Steps 1 to 4, Step 6 and Step 6.5, and for the header line, the `⭐` on the top pick and the footer. **Only the overrides below change.** Nothing is published: the author copies a post, or opens X's compose window, by hand.
+Follow `SKILL.md` (same folder) for Steps 1 to 4, Step 6 and Step 6.5, and for the header line, the `⭐` on the top pick and the footer. **Only the overrides below change.** Nothing is published by this run: the author copies a post, opens X's compose window, or adds the option to the app's X queue and posts it from there.
 
 ## Override: Step 1, harvest on the X channel
 
@@ -25,7 +25,7 @@ Each option is one post in **section A**, plus optional sections B and C:
 - `**B. Thread**` (optional, 2 to 5 posts): posts 2 and up, each at most 280 characters, each starting on its own line with its number and a slash: `2/ ...`, `3/ ...`. Never use `---` between thread posts (that line closes the option). Omit B when the idea fits in one post; a thread only earns its place when each post adds something.
 - `**C. First comment**` (optional): the link, when the option has one. **Never put a link in post A**: X buries posts with outbound links, a link in the first reply does not. Follow the same link ladder as SKILL.md Step 5 (Landing URL, Site URL, or omit C entirely). When C exists, end post A with nothing about the link.
 - `_Why it works:_` one line, as in SKILL.md.
-- Drop `_Suggested visuals:_`: no image is rendered for X.
+- `_Suggested visuals:_` with exactly ONE numbered line, in the line format SKILL.md uses: `1. <the idea in words> - AI prompt: "<the prompt>"`. Follow SKILL.md's Idea 1 (the scroll-stopper), but compose the prompt for a **wide 16:9 landscape frame**: the subject off-centre with room on both sides, nothing important at the top or bottom edge, and say "wide 16:9 landscape composition" in the prompt. No screenshot idea and no second or third idea: the app renders three takes of this one prompt when the author adds the option to the X queue.
 
 There is no company-page post and no repost caption: one author, one account. Ignore any "Mode" instruction about a company page.
 
@@ -38,6 +38,6 @@ There is no company-page post and no repost caption: one author, one account. Ig
 
 ## Override: Step 7, the file
 
-Write to the exact path the wrapper passed (inside the `x/` folder of the drafts dir). Same file shape as SKILL.md Step 7 (the same first-line title and the same option header line), with the title reading "X drafts" instead of "LinkedIn drafts" and the instruction line saying: copy section A, or open it in X from the app; post the thread and the first comment as replies.
+Write to the exact path the wrapper passed (inside the `x/` folder of the drafts dir). Same file shape as SKILL.md Step 7 (the same first-line title and the same option header line), with the title reading "X drafts - ..." (a plain hyphen, never a dash) instead of "LinkedIn drafts - ..." and the instruction line saying: copy section A, or open it in X from the app; post the thread and the first comment as replies.
 
 Before finishing, re-count every section A and every thread post. Any one over 280 is rewritten, not trimmed mid-word.

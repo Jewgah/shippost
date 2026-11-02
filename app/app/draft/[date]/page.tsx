@@ -24,7 +24,7 @@ export default async function DraftPage({ params }: { params: Promise<{ date: st
       </Link>
 
       <div className="my-4">
-        <h1 className="font-mono text-lg text-fg">{draft.title || `Drafts — ${formatDraftId(date)}`}</h1>
+        <h1 className="font-mono text-lg text-fg">{draft.title || `Drafts - ${formatDraftId(date)}`}</h1>
         <div className="mt-1 font-mono text-xs text-muted">{formatDraftId(date)}</div>
         {draft.instruction && (
           <p className="mt-2 rounded-lg border border-border bg-surface/60 px-3 py-2 text-xs text-muted">

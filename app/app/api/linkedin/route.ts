@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -11,6 +10,7 @@ import { defaultComment, defaultPageComment } from "@/lib/firstComment";
 import { recordPick } from "@/lib/voice";
 import { STALE_MS } from "@/lib/runLock";
 import { comfyBaseUrl } from "@/lib/comfy";
+import { spawnDetached } from "@/lib/spawnDetached";
 import {
   attachVideo,
   attachVideoError,
@@ -39,20 +39,6 @@ export const dynamic = "force-dynamic";
 
 const validOption = (n: number) => Number.isInteger(n) && n >= 1 && n <= 20;
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
-
-/** A detached child whose output goes to a log file: a dev-server restart must not kill it. */
-function spawnDetached(script: string, args: string[], logFile: string, env: NodeJS.ProcessEnv = process.env) {
-  const { repoRoot } = loadConfig().resolved;
-  fs.mkdirSync(path.dirname(logFile), { recursive: true });
-  const out = fs.openSync(logFile, "a");
-  spawn(process.execPath, ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", script, ...args], {
-    cwd: repoRoot,
-    detached: true,
-    env,
-    stdio: ["ignore", out, out],
-  }).unref();
-  fs.closeSync(out);
-}
 
 /** The LinkedIn runner holds `.linkedin/.lock` for a whole run (a login window, a post, a repost). */
 function runnerBusy(): boolean {

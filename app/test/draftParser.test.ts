@@ -669,3 +669,32 @@ _Why it works:_ concrete.
     expect(o.firstComment).toBe("https://example.com/queue");
   });
 });
+
+describe("an X option's visuals line (SKILL-x.md)", () => {
+  const md = `# X drafts - 2026-11-02 · 1 option
+
+## ⭐ Option 1 - build-in-public - the queue   (9.1/10)
+**A. Company post**
+I built a queue that posts to X.
+
+**B. Thread**
+2/ It renders the image first.
+
+**C. First comment**
+https://example.com
+
+_Why it works:_ concrete.
+_Suggested visuals:_
+1. a mail sorter robot - AI prompt: "a robot sorting postcards, wide 16:9 landscape composition"
+
+---
+`;
+
+  it("yields one prompt, three seeds, and leaves the reply and the thread alone", () => {
+    const opt = parseDraft(md).options[0];
+    expect(firstRenderablePrompt(opt.visual)).toBe("a robot sorting postcards, wide 16:9 landscape composition");
+    expect(variantPrompts(opt.visual).map((v) => v.prompt)).toEqual(Array(3).fill("a robot sorting postcards, wide 16:9 landscape composition"));
+    expect(opt.firstComment).toBe("https://example.com");
+    expect(opt.repostCaption).toBe("2/ It renders the image first.");
+  });
+});

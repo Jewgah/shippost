@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import ThemeSwitcher from "./ThemeSwitcher";
 import QueueBoard from "./QueueBoard";
+import XQueueBoard from "./XQueueBoard";
 
 const QUEUE_OPEN_KEY = "shippost-queue-open";
 
@@ -28,6 +29,9 @@ export default function TopBar({
   // reloads (remembered per browser) until closed with the icon or Esc.
   const [queueOpen, setQueueOpen] = useState(false);
   const [queued, setQueued] = useState(0);
+  const [queuedX, setQueuedX] = useState(0);
+  const waiting = onX ? queuedX : queued;
+  const queueName = onX ? "X post queue" : "LinkedIn post queue";
   // The panel is portalled to <body>: the header's backdrop-blur would otherwise become the
   // containing block of a `fixed` child and squash the panel into the header's 56px.
   const [mounted, setMounted] = useState(false);
@@ -135,28 +139,26 @@ export default function TopBar({
           ))}
         </nav>
         <div className="flex items-center gap-3">
-          {!onX && (
           <button
             ref={queueBtnRef}
             type="button"
             onClick={() => toggleQueue(!queueOpen)}
             aria-expanded={queueOpen}
             aria-controls="queue-dropdown"
-            aria-label={`LinkedIn post queue${queued ? `, ${queued} waiting` : ""}`}
-            title="LinkedIn post queue"
+            aria-label={`${queueName}${waiting ? `, ${waiting} waiting` : ""}`}
+            title={queueName}
             className={`relative transition hover:text-accent ${queueOpen ? "text-accent" : "text-muted"}`}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               <path d="M17 16l3 2-3 2v-4z" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
             </svg>
-            {queued > 0 && (
+            {waiting > 0 && (
               <span className="absolute -right-2 -top-2 min-w-[16px] rounded-full bg-accent px-1 text-center font-mono text-[10px] leading-4 text-bg">
-                {queued}
+                {waiting}
               </span>
             )}
           </button>
-          )}
           <Link
             href="/settings"
             aria-label="Settings"
@@ -200,11 +202,11 @@ export default function TopBar({
           <div
             ref={queueRef}
             id="queue-dropdown"
-            hidden={!queueOpen || onX}
+            hidden={!queueOpen}
             className="fixed bottom-4 right-4 top-16 z-30 w-[min(var(--queue-w),calc(100vw-32px))] overflow-y-auto rounded-2xl border border-border bg-bg p-4 shadow-2xl"
           >
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-fg">LinkedIn queue</h2>
+              <h2 className="text-sm font-semibold text-fg">{onX ? "X queue" : "LinkedIn queue"}</h2>
               <button
                 type="button"
                 onClick={() => toggleQueue(false)}
@@ -214,14 +216,20 @@ export default function TopBar({
                 ✕
               </button>
             </div>
-            <QueueBoard
-              brandName={brandName}
-              hasLogo={hasLogo}
-              authorName={authorName}
-              hasAvatar={hasAvatar}
-              pollMs={queueOpen ? 3_000 : 15_000}
-              onCount={setQueued}
-            />
+            {/* Both stay mounted so each badge count stays current; the other channel's board is hidden. */}
+            <div hidden={onX}>
+              <QueueBoard
+                brandName={brandName}
+                hasLogo={hasLogo}
+                authorName={authorName}
+                hasAvatar={hasAvatar}
+                pollMs={queueOpen && !onX ? 3_000 : 15_000}
+                onCount={setQueued}
+              />
+            </div>
+            <div hidden={!onX}>
+              <XQueueBoard pollMs={queueOpen && onX ? 3_000 : 15_000} onCount={setQueuedX} />
+            </div>
           </div>,
           document.body
         )}
