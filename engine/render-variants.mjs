@@ -333,7 +333,7 @@ async function main() {
   let have = onDisk();
   if (have.done === total) {
     // Clips rendered before the comment cards existed get theirs here (cheap, no lock needed).
-    if (have.videoDone && !existsSync(join(visualsDir, `${id}-card-post.png`))) await cutCards({ id, visualsDir, queueDir });
+    if (have.videoDone && !existsSync(join(visualsDir, `${id}-card-post.gif`))) await cutCards({ id, visualsDir, queueDir });
     setState({ state: 'done', done: total, total });
     log(`job ${id}: every candidate is already rendered`);
     return 0;

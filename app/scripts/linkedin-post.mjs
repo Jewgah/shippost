@@ -297,7 +297,13 @@ async function publish(page, job) {
   // A video keeps Post disabled while it uploads; click() waits for it to enable. ASSUMED, not yet
   // measured on a real video post: 5 min covers a 20 s clip of a few MB. A click that times out
   // never happened, so postClicked stays false and the item goes back to the queue.
-  await post.click(isVideo(job.asset) ? { timeout: VIDEO_TIMEOUT } : undefined);
+  // The text is read again once Post is clickable: a 26 MB video went out as the page with NO text
+  // (2026-10-29), though pasteInto had seen it land. trial waits for Post to enable without clicking.
+  await post.click({ trial: true, timeout: isVideo(job.asset) ? VIDEO_TIMEOUT : 30_000 });
+  const editor = composerOf(page).locator('[contenteditable="true"]').first();
+  const left = (await editor.innerText().catch(() => '')).replace(/\s+/g, '').length;
+  if (left < job.text.replace(/\s+/g, '').length * 0.9) throw new Error(`the post text was wiped from the LinkedIn editor before Post (${left} characters left): nothing was posted`);
+  await post.click();
   postClicked = true;
   // "The Post button disappeared" is NOT proof (2026-10-14: the composer closed, the runner moved on
   // to the repost at once, and the post never appeared; leaving the page mid-publish is the likely
@@ -306,6 +312,9 @@ async function publish(page, job) {
   await page.screenshot({ path: join(JOBS_DIR, `${job.id}.after-post.png`) }).catch(() => {});
   const urn = await confirmPublished(page, job.text, listUrl, before);
   if (!urn) throw new Error('Post was clicked but LinkedIn did not confirm it (no confirmation, and not on the page after about 2 minutes): check LinkedIn before posting it again');
+  // LinkedIn says "Please remain on this page until your upload finishes" (after-post screenshot,
+  // 2026-10-29): the repost and comments must not navigate away before it is gone.
+  if (isVideo(job.asset)) await page.getByText(/remain on this page/i).first().waitFor({ state: 'hidden', timeout: VIDEO_TIMEOUT }).catch(() => log(`job ${job.id}: the video upload notice was still up after ${VIDEO_TIMEOUT / 60_000} min`));
   return urn;
 }
 

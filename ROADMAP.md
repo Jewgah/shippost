@@ -2,6 +2,16 @@
 
 A running log of notable changes, most recent first.
 
+## fix(poster): never post a video with its text wiped, and backfill the comment cards as .gif (2026-11-02)
+
+**Problem:** On 2026-10-29 a 26 MB video post went out with NO text, although `pasteInto` had seen the text land: the editor was emptied while the video uploaded. LinkedIn also shows "Please remain on this page until your upload finishes" after Post, and the runner could navigate to the repost and comments before the upload finished. Separately, `render-variants.mjs` checked for `<id>-card-post.png` to decide whether to backfill the comment cards, but `cutCards` writes `.gif`, so the backfill re-ran on every call.
+
+**Solution:** Post is first waited on with a trial click (enabled, not clicked; 5 min for a video, 30 s otherwise, the old default). The editor text is then read again, and if under 90% of the queued text is left (whitespace ignored) the run throws before clicking, so the item goes back to the queue with nothing posted. After a video post is confirmed, the runner waits for the "remain on this page" notice to disappear (logged, not fatal, if it is still up after 5 min). The backfill test now looks for the `.gif`. Not tested on a real LinkedIn post; a dry run returns before Post, so it never exercises the check.
+
+**Files changed:** app/scripts/linkedin-post.mjs, engine/render-variants.mjs, ROADMAP.md
+
+---
+
 ## feat: an "X" tab next to LinkedIn (2026-11-02)
 
 **Problem:** shippost only drafted for LinkedIn: one drafts folder, one 3000-character prompt, one picks log, one voice corpus. The author is opening an X account and wanted the same 5-ranked-options flow for it, without touching how LinkedIn behaves.
