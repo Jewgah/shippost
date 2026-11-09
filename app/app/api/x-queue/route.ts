@@ -42,6 +42,15 @@ const MAX_THREAD = 5;
 const validOption = (n: number) => Number.isInteger(n) && n >= 1 && n <= 20;
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
 const keysFile = () => path.join(os.homedir(), ".shippost", "x-keys.json");
+/** The keys file holds the four keys x-post.mjs needs. Their values never leave this function. */
+function keysReady(): boolean {
+  try {
+    const k = JSON.parse(fs.readFileSync(keysFile(), "utf8"));
+    return ["apiKey", "apiSecret", "accessToken", "accessSecret"].every((f) => typeof k?.[f] === "string" && k[f].trim() !== "");
+  } catch {
+    return false;
+  }
+}
 const poster = () => path.join(loadConfig().resolved.repoRoot, "app", "scripts", "x-post.mjs");
 
 /** The X runner holds `x/.queue/.lock` for a whole run. */
@@ -61,9 +70,14 @@ function settleDeadRuns(items: QueueItem[]): void {
   if (runnerAlive()) return;
   for (const item of items) {
     if (item.status !== "posting") continue;
-    item.status = "failed";
-    item.error = "the posting run stopped before finishing: check x.com before retrying";
-    writeItem(item);
+    // Re-read: the run may have finished between the listing and the lock check.
+    const now = readItem(item.id, CH);
+    if (now?.status !== "posting") {
+      if (now) Object.assign(item, now);
+      continue;
+    }
+    Object.assign(item, now, { status: "failed", error: "the posting run stopped before finishing: check x.com before retrying" });
+    writeItem({ ...item, channel: CH });
   }
 }
 
@@ -120,6 +134,7 @@ function addToQueue(b: Record<string, unknown>) {
     return bad("that X draft does not exist");
   }
   const opt = parseDraft(md).options.find((o) => o.n === option);
+  if (!opt) return bad("that option is not in the X draft");
 
   const id = `${date}-o${option}-${crypto.randomBytes(3).toString("hex")}`;
   const item: QueueItem = {
@@ -127,8 +142,8 @@ function addToQueue(b: Record<string, unknown>) {
     channel: CH,
     draft: date,
     option,
-    topic: opt?.topic ?? "",
-    pillar: opt?.pillar,
+    topic: opt.topic,
+    pillar: opt.pillar,
     mode: "personal",
     text,
     repost: "",
@@ -220,7 +235,7 @@ export async function GET() {
   }
   return NextResponse.json({
     items: items.map((i) => ({ ...i, images: imagesFor(i.id, CH), render: readRenderState(i.id, CH) })),
-    hasKeys: fs.existsSync(keysFile()),
+    hasKeys: keysReady(),
   });
 }
 

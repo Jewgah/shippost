@@ -120,7 +120,7 @@ export default function XQueueBoard({ pollMs = 3_000, onCount }: { pollMs?: numb
         <button type="button" onClick={checkKeys} disabled={checking} className={`${btn} border border-border`}>
           {checking ? "Checking…" : "Check X keys"}
         </button>
-        {q && !q.hasKeys && <span className="text-muted">X keys not set: see the README, &quot;X posting&quot;.</span>}
+        {q && !q.hasKeys && <span className="text-muted">X keys missing or incomplete: see the README, &quot;X posting&quot;.</span>}
         {checkNote && (
           <span role="status" className="text-muted">
             {checkNote}
@@ -134,7 +134,8 @@ export default function XQueueBoard({ pollMs = 3_000, onCount }: { pollMs?: numb
 
       {queued.map((i) => {
         const chosen = chosenCandidate(i.images, picks, i.id);
-        const rendering = i.render?.state === "rendering" || i.render?.state === "waiting";
+        // No render state yet: render-variants is still starting, so it counts as rendering.
+        const rendering = !i.render || i.render.state === "rendering" || i.render.state === "waiting";
         const blockedByRender = rendering && !(i.id in picks) && defaultCandidate(i.images) === null;
         const done = i.xIds?.length ?? 0;
         return (
@@ -158,7 +159,7 @@ export default function XQueueBoard({ pollMs = 3_000, onCount }: { pollMs?: numb
                     </button>
                   ) : (
                     <div key={v} className="flex aspect-video items-center justify-center rounded-lg border-2 border-dashed border-border text-xs text-muted">
-                      {i.render?.state === "waiting" ? "waiting its turn" : rendering || !i.render ? "rendering…" : "no image"}
+                      {i.render?.state === "waiting" ? "waiting its turn" : rendering ? "rendering…" : "no image"}
                     </div>
                   )
                 )}

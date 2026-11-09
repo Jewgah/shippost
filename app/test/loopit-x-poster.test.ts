@@ -36,6 +36,7 @@ syncBuiltinESMExports();
 let tweets = 0;
 const start = Number(process.env.FAKE_X_START_ID || 1000);
 const failAt = Number(process.env.FAKE_X_FAIL_TWEET || 0);
+const failStatus = Number(process.env.FAKE_X_FAIL_STATUS || 503);
 const bodyText = async (b) => {
   if (b == null) return '';
   if (typeof b === 'string') return b;
@@ -57,7 +58,7 @@ globalThis.fetch = async (input, init = {}) => {
   const p = u.pathname;
   if (p === '/2/tweets' && method === 'POST') {
     tweets++;
-    if (tweets === failAt) return reply(503, { title: 'Service Unavailable', detail: 'fake outage', type: 'about:blank', status: 503 });
+    if (tweets === failAt) return reply(failStatus, { title: 'Service Unavailable', detail: 'fake outage', type: 'about:blank', status: failStatus });
     let text = ''; try { text = JSON.parse(body).text; } catch {}
     return reply(201, { data: { id: String(start + tweets), text } });
   }
@@ -277,10 +278,11 @@ describe("x-post.mjs --job", () => {
     expect(String(done.url)).toMatch(/status\/1001$/);
   }, 90_000);
 
-  it("a failure before the first post goes back to queued, with no id", () => {
+  // A 403 is a definite refusal. A 5xx may come after X created the post, so it ends failed (xPost.test.ts).
+  it("a refusal before the first post goes back to queued, with no id", () => {
     writeKeys();
     writeItem(item("x3"));
-    const r = run(["--job", "x3"], { FAKE_X_FAIL_TWEET: "1" });
+    const r = run(["--job", "x3"], { FAKE_X_FAIL_TWEET: "1", FAKE_X_FAIL_STATUS: "403" });
     expect(tweetsOf(requests()), `X-FIRST-FAIL: one attempt (exit ${r.code}: ${r.out.slice(0, 300)})`).toHaveLength(1);
     const after = readItem("x3");
     expect(after.status, "X-FIRST-FAIL: nothing went out, so the item is postable again").toBe("queued");

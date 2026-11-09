@@ -2,6 +2,16 @@
 
 A running log of notable changes, most recent first.
 
+## fix(x): a 5xx never re-queues an X post, and eight smaller queue fixes (2026-11-09)
+
+**Problem:** A /review-deep of 8a3c790 found that a 5xx from X on a post put the item back in the queue as if nothing went out, though X may have created the post, so the next click could post it twice. It also found: "Edit with AI" on an X option dropped its `_Suggested visuals:_` line (the queue then renders nothing, silently); a keys file missing one key still counted as set, so Post started a run that exited without a word; the open queue covered the page on `/x` instead of pushing it aside; Post was clickable before the render state existed, so it could go out with no image; settling a dead run could overwrite an item that had just finished with a stale copy; the route and the poster shared one tmp file name per item; `check_after_secs: 0` polled STATUS with no wait; and an option missing from the draft was queued anyway.
+
+**Solution:** A 5xx or 408 on a post marks the item failed with "check x.com before retrying" (a 4xx still re-queues). `edit.sh`'s X prompt keeps the visuals line. `GET /api/x-queue` reports `hasKeys` only when all four keys are present (their values never leave the function). The `queue-open` layout class applies on `/x` too. No render state yet counts as rendering. `settleDeadRuns` re-reads each item before marking it failed. Tmp names carry the pid (and random bytes in `writeItem`). The STATUS wait is at least 1 s. Enqueue refuses an option not in the draft. The loopit acceptance check for "a failure before the first post goes back to queued" now uses a 403, since a 503 is exactly the case that must not re-queue. Skipped: the stale-lock takeover race (same pattern as `lib/runLock.ts`), an upper bound on `--size` (CLI only), a cross-site guard on GET (mirrors `/api/linkedin`).
+
+**Files changed:** app/scripts/x-post.mjs, app/app/api/x-queue/route.ts, app/lib/linkedinQueue.ts, app/components/{TopBar,XQueueBoard}.tsx, engine/edit.sh, app/test/{xPost,xQueueRoute,loopit-x-poster}.test.ts, README.md, ROADMAP.md
+
+---
+
 ## feat(x): X drafts get 16:9 visuals and a queue that posts through the X API (2026-11-03)
 
 **Problem:** The X tab (e1c40e2) was text only: an X option had no image prompt, nothing rendered for it, and posting meant copying each post, thread reply and link reply into X by hand. Looking at a real X batch, the author asked for the LinkedIn-style visuals (16:9) and an "Add to queue" flow that posts through the official X API, not a browser robot.

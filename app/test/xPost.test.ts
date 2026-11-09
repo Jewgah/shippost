@@ -184,6 +184,18 @@ describe("x-post.mjs --job", () => {
     expect(tweetCalls()).toHaveLength(1);
   });
 
+  it("a 5xx on the first post marks the item failed, never queued: X may have created it", async () => {
+    writeKeys();
+    writeItem(item());
+    const t = tweets(1, 503);
+    fakeX((url) => t(url) ?? { status: 500 });
+    expect(await run("--job", ID)).toBe(1);
+    const after = readItem();
+    expect(after.status).toBe("failed");
+    expect(after.xIds ?? []).toEqual([]);
+    expect(after.error).toMatch(/503.*check x\.com before retrying/);
+  });
+
   it("a video is uploaded as tweet_video and STATUS is polled until processing succeeds, before the post", async () => {
     writeKeys();
     const mp4 = path.join(tmp, "x", ".visuals", `${ID}-v4.mp4`);

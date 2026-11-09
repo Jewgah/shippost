@@ -41,7 +41,7 @@ if [ "${SHIPPOST_CHANNEL:-linkedin}" = "x" ]; then
 Rewrite ONLY 'Option $opt' according to this instruction from the author: \"$instr\"
 Rules:
 - Leave every OTHER option byte-for-byte unchanged; do not touch the title or footer.
-- Keep Option $opt's structure: the header line '## [⭐ ]Option $opt - {pillar} - {2-4 word topic}   ({score}/10)', then '**A. Company post**' (the single post), '**B. Thread**' (only if the option already has one; posts numbered '2/', '3/', one per paragraph), '**C. First comment**' (only if the option already has one), '_Why it works:_'.
+- Keep Option $opt's structure: the header line '## [⭐ ]Option $opt - {pillar} - {2-4 word topic}   ({score}/10)', then '**A. Company post**' (the single post), '**B. Thread**' (only if the option already has one; posts numbered '2/', '3/', one per paragraph), '**C. First comment**' (only if the option already has one), '_Why it works:_', and '_Suggested visuals:_' (its one AI-prompt line: keep it, and keep the prompt a wide 16:9 landscape one; it is what the X queue renders).
 - Keep the post in section A at 280 characters or fewer counted the X way (every link counts 23, emoji and CJK count 2); keep each thread post at 280 or fewer.
 - Language: $CFG_LANGUAGE.
 - Scrub rules still apply: never name clients ($CFG_SCRUB_LIST), never the day job, no secrets/tokens/internal URLs.

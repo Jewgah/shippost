@@ -160,7 +160,7 @@ async function waitProcessed(keys, info, statusUrl) {
   for (let n = 0; info && (info.state === 'pending' || info.state === 'in_progress'); n++) {
     if (n >= MAX_POLLS) throw new Error('X was still processing the video after the last status check: try again later');
     const secs = Number(info.check_after_secs);
-    await sleep(Math.min(Number.isFinite(secs) && secs >= 0 ? secs : 1, 30) * 1000);
+    await sleep(Math.min(Number.isFinite(secs) && secs >= 1 ? secs : 1, 30) * 1000);
     info = processingOf(await xFetch(keys, 'GET', statusUrl));
   }
   if (info?.state === 'failed') throw new Error(`X could not process the media: ${info.error?.message || info.error?.name || 'no reason given'}`);
@@ -274,8 +274,9 @@ function lock(dir) {
 async function postJob(queueDir, id, keys) {
   const file = join(queueDir, `${id}.json`);
   const save = (item) => {
-    writeFileSync(`${file}.tmp`, JSON.stringify(item, null, 2));
-    renameSync(`${file}.tmp`, file);
+    const tmp = `${file}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(item, null, 2));
+    renameSync(tmp, file);
   };
   const item = JSON.parse(readFileSync(file, 'utf8'));
   if (item.status !== 'queued') {
@@ -311,7 +312,8 @@ async function postJob(queueDir, id, keys) {
       try {
         r = await xFetch(keys, 'POST', `${API}/tweets`, { json: body });
       } catch (e) {
-        if (e instanceof XNetworkError) lost = true;
+        // A 5xx or a timeout may come back after X created the post: never treat it as not sent.
+        if (e instanceof XNetworkError || (e instanceof XHttpError && (e.status >= 500 || e.status === 408))) lost = true;
         throw e;
       }
       const postId = r?.data?.id;

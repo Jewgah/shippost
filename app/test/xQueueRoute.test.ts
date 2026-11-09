@@ -87,6 +87,14 @@ describe("POST /api/x-queue (enqueue)", () => {
     expect(spawned).toHaveLength(0);
   });
 
+  it("refuses an option that is not in the draft", async () => {
+    const { POST } = await import("@/app/api/x-queue/route");
+    const res = await POST(req(enqueue({ option: 7 })));
+    expect(res.status).toBe(400);
+    expect(itemFiles()).toEqual([]);
+    expect(spawned).toEqual([]);
+  });
+
   it("accepts exactly 280, and a long URL that X counts as 23", async () => {
     const { POST } = await import("@/app/api/x-queue/route");
     expect((await POST(req(enqueue({ text: "a".repeat(280) })))).status).toBe(200);
@@ -153,6 +161,20 @@ describe("POST /api/x-queue actions, GET", () => {
     expect(j.hasKeys).toBe(true);
     expect(raw).not.toContain("SECRET-ONE");
     expect(raw).not.toContain("SECRET-TWO");
+
+    // A file missing one key is not ready: Post stays disabled instead of failing silently.
+    fs.writeFileSync(path.join(tmp, "home", ".shippost", "x-keys.json"), JSON.stringify({ apiKey: "k", apiSecret: "s", accessToken: "t" }));
+    expect((await (await GET()).json()).hasKeys).toBe(false);
+  });
+
+  it("GET settles a posting item with no live run as failed, keeping its ids; a posted one is left alone", async () => {
+    const { GET } = await import("@/app/api/x-queue/route");
+    writeX("p1", { status: "posting", xIds: ["1"] });
+    writeX("p2", { status: "posted", xIds: ["2"], picked: true });
+    await GET();
+    const read = (id: string) => JSON.parse(fs.readFileSync(path.join(xQueue, `${id}.json`), "utf8"));
+    expect(read("p1")).toMatchObject({ status: "failed", xIds: ["1"] });
+    expect(read("p2")).toMatchObject({ status: "posted", xIds: ["2"] });
   });
 
   it("/api/linkedin and /api/x-queue never list each other's items", async () => {

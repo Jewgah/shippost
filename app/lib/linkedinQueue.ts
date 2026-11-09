@@ -1,4 +1,5 @@
 import "server-only";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config";
@@ -164,8 +165,10 @@ export function writeItem(item: QueueItem): void {
   const channel = channelOf(item);
   fs.mkdirSync(queueDir(channel), { recursive: true });
   const file = itemPath(item.id, channel);
-  fs.writeFileSync(`${file}.tmp`, JSON.stringify(item, null, 2));
-  fs.renameSync(`${file}.tmp`, file);
+  // Its own tmp name: the route and a poster script can write the same item at once.
+  const tmp = `${file}.${process.pid}.${crypto.randomBytes(3).toString("hex")}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(item, null, 2));
+  fs.renameSync(tmp, file);
 }
 
 /**

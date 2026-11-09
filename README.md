@@ -177,7 +177,7 @@ Posting from the X queue goes through the official X API with your own developer
 6. Click **Check X keys** in the X queue (or run `node app/scripts/x-post.mjs --check`): it reads your account once and prints your handle.
 7. Post one queued option and check it on x.com.
 
-`node app/scripts/x-post.mjs --job <id> --dry-run` prints the chain a queued item would send, in order, without sending anything. Each post id is saved as soon as X returns it, so a chain that fails halfway keeps what went out: **Retry** in the queue puts it back, and Post continues after the last posted id. Not verified before the first real post: that X's v2 media upload accepts these OAuth 1.0a keys (if it answers 403 or 404 the poster tries the v1.1 upload endpoint once), and how X shows a 4:5 clip in the feed. The portal steps above follow X's developer docs and may be worded differently in the console.
+`node app/scripts/x-post.mjs --job <id> --dry-run` prints the chain a queued item would send, in order, without sending anything. Each post id is saved as soon as X returns it, so a chain that fails halfway keeps what went out: **Retry** in the queue puts it back, and Post continues after the last posted id. If X answers a post with a 5xx error or times out, the item ends **failed** with "check x.com before retrying", because that post may have gone out anyway: look on x.com before you click Retry. Not verified before the first real post: that X's v2 media upload accepts these OAuth 1.0a keys (if it answers 403 or 404 the poster tries the v1.1 upload endpoint once), and how X shows a 4:5 clip in the feed. The portal steps above follow X's developer docs and may be worded differently in the console.
 
 ## Publish ritual (~2 min)
 
