@@ -25,6 +25,10 @@ describe("defaultComment (Jordan's rule, 2026-10-15)", () => {
     const offer = "The offer, with prices, is here: https://infinify.ai/en/diagnostic-ia/";
     expect(defaultComment(opt("client-outcome", offer), "personal", links)).toBe(offer);
   });
+  it("profile only, a client-outcome post about the company itself (C links its site): keeps C, never the offer", () => {
+    const c = "The offer, with prices and what is included, is here: https://hakolkal.com";
+    expect(defaultComment(opt("client-outcome", c), "personal", { ...links, companyUrl: "https://hakolkal.com" })).toBe(c);
+  });
   it("the page's own comment (Jordan, 2026-10-19): the page's voice and the company site, never the author's", () => {
     expect(defaultPageComment({ ...links, companyUrl: "https://hakolkal.com" })).toBe("More of what we build: https://hakolkal.com");
     expect(defaultPageComment(links)).toBe("");

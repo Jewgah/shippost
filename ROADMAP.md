@@ -2,6 +2,14 @@
 
 A running log of notable changes, most recent first.
 
+## fix(linkedin): a post about the company keeps its own first comment (2026-11-10)
+
+**Problem:** The 2026-10-15 rule gives every profile-only client-outcome post the Infinify offer link as its first comment. A HakolKal ad post (client-outcome, section C linking hakolkal.com) was queued with the Infinify link instead of its own.
+
+**Solution:** In `defaultComment`, a profile-only option whose section C already links `brand.companyUrl` keeps section C as written. Every other case is unchanged.
+
+**Files changed:** `app/lib/firstComment.ts`, `app/test/firstComment.test.ts` (new case; fails without the fix).
+
 ## fix(x): a 5xx never re-queues an X post, and eight smaller queue fixes (2026-11-09)
 
 **Problem:** A /review-deep of 8a3c790 found that a 5xx from X on a post put the item back in the queue as if nothing went out, though X may have created the post, so the next click could post it twice. It also found: "Edit with AI" on an X option dropped its `_Suggested visuals:_` line (the queue then renders nothing, silently); a keys file missing one key still counted as set, so Post started a run that exited without a word; the open queue covered the page on `/x` instead of pushing it aside; Post was clickable before the render state existed, so it could go out with no image; settling a dead run could overwrite an item that had just finished with a stale copy; the route and the poster shared one tmp file name per item; `check_after_secs: 0` polled STATUS with no wait; and an option missing from the draft was queued anyway.

@@ -29,6 +29,9 @@ export function defaultComment(option: DraftOption, mode: "personal" | "company"
   const c = /^\(?\s*no link/i.test(option.firstComment) ? "" : option.firstComment.trim();
   const landing = links.landingUrl.trim();
   const site = links.siteUrl.trim();
+  const company = (links.companyUrl ?? "").trim();
+  // A post about the company itself (section C links its site) keeps that link, client-outcome or not.
+  if (mode === "personal" && company && c.includes(company)) return c;
   const infinify =
     Boolean(landing) && (option.pillar === "client-outcome" || [c, option.companyPost].some((t) => t.includes(landing)));
   if (mode === "personal" && infinify)
